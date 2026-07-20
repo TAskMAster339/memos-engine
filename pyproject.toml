@@ -1,0 +1,14 @@
+[project]
+name = "memos"
+version = "0.1.0"
+description = "Memory OS for OpenCode — structural code index with episodic memory"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

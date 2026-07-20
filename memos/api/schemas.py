@@ -40,3 +40,23 @@ class SemanticSearchResponse(BaseModel):
     query: str
     top_k: int
     results: list[dict[str, Any]]
+
+
+class MemoryEntryResponse(BaseModel):
+    id: int
+    project_id: int
+    scope_type: str
+    scope_id: int | None = None
+    kind: str
+    content: str
+    source: str
+    source_hash: str | None = None
+    created_at: str
+
+
+class MemoryCreateRequest(BaseModel):
+    content: str
+    scope_type: str = "project"
+    scope_id: int | None = None
+    kind: str = "note"
+    source: str = "agent"

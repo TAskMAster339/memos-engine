@@ -257,3 +257,34 @@ async def test_tool_registration(mcp_conn):
     assert "list_files_tool" in names
     assert "list_symbols_tool" in names
     assert "list_projects_tool" in names
+    assert "memory_add_note" in names
+    assert "get_memories" in names
+
+
+@pytest.mark.anyio
+async def test_memory_add_note(mcp_conn):
+    results = await mcp.call_tool(
+        "memory_add_note",
+        {"content": "test memory", "scope_type": "project", "kind": "note"},
+    )
+    text = results[0][0].text
+    assert '"content": "test memory"' in text
+    assert '"scope_type": "project"' in text
+    assert '"source": "agent"' in text
+    assert '"id"' in text
+
+
+@pytest.mark.anyio
+async def test_get_memories(mcp_conn):
+    await mcp.call_tool(
+        "memory_add_note",
+        {"content": "mem 1", "scope_type": "project"},
+    )
+    await mcp.call_tool(
+        "memory_add_note",
+        {"content": "mem 2", "scope_type": "file", "scope_id": 1},
+    )
+    results = await mcp.call_tool("get_memories", {})
+    text = results[0][0].text
+    assert '"content": "mem 1"' in text
+    assert '"content": "mem 2"' in text

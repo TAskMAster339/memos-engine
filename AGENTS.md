@@ -116,5 +116,5 @@ tests/
 6. ✅ FastAPI wrapper
 7. ✅ Semantic search (sqlite-vec + sentence-transformers)
 8. ✅ MCP server
-9. `memory_entries` write-path via `memory_add_note`
+9. ✅ `memory_entries` write-path via `memory_add_note`
 10. LLM enrichment: `get_or_generate_summary()` with content_hash check

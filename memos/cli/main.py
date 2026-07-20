@@ -33,7 +33,13 @@ from memos.core.models import CallEdge, File, Import, Project, Symbol
 from memos.indexer.diff import compute_file_hash, should_reindex
 from memos.indexer.go import GoIndexer
 from memos.indexer.typescript import TypeScriptIndexer
-from memos.query.core import find_calls, find_symbol, get_module
+from memos.query.core import (
+    add_memory_entry,
+    find_calls,
+    find_symbol,
+    get_memory_entries,
+    get_module,
+)
 from memos.search.sqlite_vec_store import SqliteVecStore
 
 EXTENSION_INDEXERS = {
@@ -296,6 +302,34 @@ def cmd_serve_mcp(args):
     mcp.run(transport="stdio")
 
 
+def cmd_memory_add(args):
+    conn, project = _open_db(args)
+    result = add_memory_entry(
+        conn,
+        project.id,
+        args.content,
+        scope_type=args.scope_type,
+        scope_id=args.scope_id,
+        kind=args.kind,
+        source=args.source,
+    )
+    conn.commit()
+    conn.close()
+    print(json.dumps(result, indent=2, default=str))
+
+
+def cmd_memory_list(args):
+    conn, project = _open_db(args)
+    results = get_memory_entries(
+        conn,
+        project.id,
+        scope_type=args.scope_type,
+        scope_id=args.scope_id,
+    )
+    conn.close()
+    print(json.dumps(results, indent=2, default=str))
+
+
 def main():
     parser = argparse.ArgumentParser(prog="memos")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -340,6 +374,35 @@ def main():
     p_mod.add_argument("module_path", metavar="path", help="Relative file path")
     p_mod.add_argument("--path", default=".", help="Project root path")
     p_mod.set_defaults(func=cmd_query_module)
+
+    p_memory = sub.add_parser("memory", help="Manage memory entries")
+    msub = p_memory.add_subparsers(dest="memory_command", required=True)
+
+    p_mem_add = msub.add_parser("add", help="Add a memory entry")
+    p_mem_add.add_argument("content", help="Memory content text")
+    p_mem_add.add_argument(
+        "--scope-type",
+        default="project",
+        choices=["project", "file", "symbol"],
+        help="Scope type",
+    )
+    p_mem_add.add_argument("--scope-id", type=int, help="Scope ID (file or symbol id)")
+    p_mem_add.add_argument(
+        "--kind", default="note", help="Kind (note, summary, decision)"
+    )
+    p_mem_add.add_argument("--source", default="agent", help="Source of the memory")
+    p_mem_add.add_argument("--path", default=".", help="Project root path")
+    p_mem_add.set_defaults(func=cmd_memory_add)
+
+    p_mem_list = msub.add_parser("list", help="List memory entries")
+    p_mem_list.add_argument(
+        "--scope-type",
+        choices=["project", "file", "symbol"],
+        help="Filter by scope type",
+    )
+    p_mem_list.add_argument("--scope-id", type=int, help="Filter by scope ID")
+    p_mem_list.add_argument("--path", default=".", help="Project root path")
+    p_mem_list.set_defaults(func=cmd_memory_list)
 
     p_serve = sub.add_parser("serve", help="Start the HTTP API server")
     p_serve.add_argument("--path", default=".", help="Project root path")

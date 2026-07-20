@@ -101,3 +101,36 @@ class TestApi:
         assert data["file"]["path"] == "src/index.ts"
         symbol_names = {s["name"] for s in data["symbols"]}
         assert "main" in symbol_names
+
+    def test_create_memory(self):
+        resp = client.post(
+            "/memories",
+            json={"content": "test note", "scope_type": "project", "kind": "note"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["content"] == "test note"
+        assert data["scope_type"] == "project"
+        assert data["kind"] == "note"
+        assert data["source"] == "agent"
+        assert data["id"] is not None
+
+    def test_get_memories(self):
+        client.post(
+            "/memories",
+            json={"content": "note 1", "scope_type": "project"},
+        )
+        client.post(
+            "/memories",
+            json={"content": "note 2", "scope_type": "file", "scope_id": 1},
+        )
+        resp = client.get("/memories")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+
+        resp = client.get("/memories", params={"scope_type": "project"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["content"] == "note 1"

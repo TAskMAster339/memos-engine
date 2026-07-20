@@ -10,7 +10,13 @@ from memos.core.db import (
     insert_symbol,
 )
 from memos.core.models import CallEdge, File, Import, Project, Symbol
-from memos.query.core import find_calls, find_symbol, get_module
+from memos.query.core import (
+    add_memory_entry,
+    find_calls,
+    find_symbol,
+    get_memory_entries,
+    get_module,
+)
 
 
 def _seed(conn):
@@ -258,3 +264,36 @@ class TestGetModule:
     def test_file_not_found(self, conn):
         results = get_module(conn, "nonexistent.ts", 1)
         assert "error" in results
+
+
+class TestAddMemoryEntry:
+    def test_add_and_retrieve(self, conn):
+        p = insert_project(
+            conn, Project(root_path="/mem", name="mem", created_at="now")
+        )
+        entry = add_memory_entry(
+            conn, p.id, "hello world", scope_type="project", kind="note"
+        )
+        assert entry["id"] is not None
+        assert entry["content"] == "hello world"
+        assert entry["scope_type"] == "project"
+        assert entry["kind"] == "note"
+        assert entry["source"] == "agent"
+        assert entry["source_hash"] is not None
+
+    def test_get_by_scope(self, conn):
+        p = insert_project(
+            conn, Project(root_path="/mem", name="mem", created_at="now")
+        )
+        add_memory_entry(conn, p.id, "project note", scope_type="project")
+        add_memory_entry(conn, p.id, "file note", scope_type="file", scope_id=42)
+        project_entries = get_memory_entries(conn, p.id, scope_type="project")
+        assert len(project_entries) == 1
+        assert project_entries[0]["content"] == "project note"
+
+        file_entries = get_memory_entries(conn, p.id, scope_type="file", scope_id=42)
+        assert len(file_entries) == 1
+        assert file_entries[0]["content"] == "file note"
+
+        all_entries = get_memory_entries(conn, p.id)
+        assert len(all_entries) == 2

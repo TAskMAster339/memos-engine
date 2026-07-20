@@ -6,12 +6,21 @@ from pydantic import BaseModel
 
 from memos.api.schemas import (
     CallEdgeResponse,
+    MemoryCreateRequest,
+    MemoryEntryResponse,
     ModuleResponse,
     SemanticSearchResponse,
     SymbolResponse,
 )
 from memos.core.db import get_connection, get_project_by_root, run_migrations
-from memos.query.core import find_calls_by_id, find_symbol, get_module, semantic_search
+from memos.query.core import (
+    add_memory_entry,
+    find_calls_by_id,
+    find_symbol,
+    get_memory_entries,
+    get_module,
+    semantic_search,
+)
 
 
 class SearchRequest(BaseModel):
@@ -96,5 +105,41 @@ def api_search_semantic(body: SearchRequest):
             project_id=project.id,
         )
         return {"query": body.query, "top_k": body.top_k, "results": results}
+    finally:
+        conn.close()
+
+
+@app.post("/memories", response_model=MemoryEntryResponse)
+def api_create_memory(body: MemoryCreateRequest):
+    conn, project = _get_conn_and_project()
+    try:
+        result = add_memory_entry(
+            conn,
+            project.id,
+            body.content,
+            scope_type=body.scope_type,
+            scope_id=body.scope_id,
+            kind=body.kind,
+            source=body.source,
+        )
+        conn.commit()
+        return result
+    finally:
+        conn.close()
+
+
+@app.get("/memories", response_model=list[MemoryEntryResponse])
+def api_get_memories(
+    scope_type: str | None = Query(None),
+    scope_id: int | None = Query(None),
+):
+    conn, project = _get_conn_and_project()
+    try:
+        return get_memory_entries(
+            conn,
+            project.id,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
     finally:
         conn.close()

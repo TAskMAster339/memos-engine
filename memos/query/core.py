@@ -1,3 +1,5 @@
+import hashlib
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -270,3 +272,45 @@ def get_module(conn, file_path: str, project_id: int) -> dict[str, Any]:
         "calls": calls_list,
         "imports": imports_list,
     }
+
+
+def add_memory_entry(  # noqa: PLR0913
+    conn,
+    project_id: int,
+    content: str,
+    scope_type: str = "project",
+    scope_id: int | None = None,
+    kind: str = "note",
+    source: str = "agent",
+) -> dict[str, Any]:
+    now = datetime.now(UTC).isoformat()
+    source_hash = hashlib.sha256(content.encode()).hexdigest()
+    cur = conn.execute(
+        "INSERT INTO memory_entries "
+        "(project_id, scope_type, scope_id, kind, content, "
+        "source, source_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (project_id, scope_type, scope_id, kind, content, source, source_hash, now),
+    )
+    row = conn.execute(
+        "SELECT * FROM memory_entries WHERE id = ?",
+        (cur.lastrowid,),
+    ).fetchone()
+    return dict(row)
+
+
+def get_memory_entries(
+    conn,
+    project_id: int,
+    scope_type: str | None = None,
+    scope_id: int | None = None,
+) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM memory_entries WHERE project_id = ?"
+    params: list[Any] = [project_id]
+    if scope_type is not None and scope_id is not None:
+        sql += " AND scope_type = ? AND scope_id = ?"
+        params.extend([scope_type, scope_id])
+    elif scope_type is not None:
+        sql += " AND scope_type = ? AND scope_id IS NULL"
+        params.append(scope_type)
+    sql += " ORDER BY created_at DESC"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]

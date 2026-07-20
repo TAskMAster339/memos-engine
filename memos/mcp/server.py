@@ -6,8 +6,10 @@ from mcp.server.fastmcp import FastMCP
 
 from memos.core.db import get_connection, get_project_by_root, run_migrations
 from memos.query.core import (
+    add_memory_entry,
     find_calls,
     find_symbol,
+    get_memory_entries,
     get_module,
     list_files,
     list_symbols,
@@ -185,6 +187,68 @@ def list_symbols_tool(
             project.id,
             file_path=file_path,
             kind=kind,
+        )
+        return json.dumps(results, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def memory_add_note(
+    content: str,
+    scope_type: str = "project",
+    scope_id: int | None = None,
+    kind: str = "note",
+) -> str:
+    """Add a note to the project's episodic memory. Notes persist across reindexing.
+
+    Args:
+        content: The text content of the memory note
+        scope_type: Scope type — 'project' (project-wide), 'file' (for a
+            specific file), or 'symbol' (for a specific symbol)
+        scope_id: ID of the file or symbol this memory belongs to
+            (required when scope_type is file or symbol)
+        kind: Kind of memory — 'note', 'summary', or 'decision'
+    """
+    try:
+        conn, project = _ensure_conn()
+        result = add_memory_entry(
+            conn,
+            project.id,
+            content,
+            scope_type=scope_type,
+            scope_id=scope_id,
+            kind=kind,
+            source="agent",
+        )
+        conn.commit()
+        return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def get_memories(
+    scope_type: str | None = None,
+    scope_id: int | None = None,
+) -> str:
+    """Retrieve memory entries for the project.
+
+    Args:
+        scope_type: Filter by scope — 'project', 'file', or 'symbol'
+        scope_id: Filter by scope ID (file or symbol id)
+    """
+    try:
+        conn, project = _ensure_conn()
+        results = get_memory_entries(
+            conn,
+            project.id,
+            scope_type=scope_type,
+            scope_id=scope_id,
         )
         return json.dumps(results, indent=2, default=str)
     except RuntimeError as e:

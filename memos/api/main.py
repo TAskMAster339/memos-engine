@@ -2,10 +2,22 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
-from memos.api.schemas import CallEdgeResponse, ModuleResponse, SymbolResponse
+from memos.api.schemas import (
+    CallEdgeResponse,
+    ModuleResponse,
+    SemanticSearchResponse,
+    SymbolResponse,
+)
 from memos.core.db import get_connection, get_project_by_root, run_migrations
-from memos.query.core import find_calls_by_id, find_symbol, get_module
+from memos.query.core import find_calls_by_id, find_symbol, get_module, semantic_search
+
+
+class SearchRequest(BaseModel):
+    query: str
+    top_k: int = 10
+
 
 PROJECT_PATH: str = os.environ.get("MEMOS_PROJECT_PATH", ".")
 
@@ -69,5 +81,20 @@ def api_get_module(path: str):
         if "error" in results:
             raise HTTPException(status_code=404, detail=results["error"])
         return results
+    finally:
+        conn.close()
+
+
+@app.post("/search/semantic", response_model=SemanticSearchResponse)
+def api_search_semantic(body: SearchRequest):
+    conn, project = _get_conn_and_project()
+    try:
+        results = semantic_search(
+            conn,
+            body.query,
+            top_k=body.top_k,
+            project_id=project.id,
+        )
+        return {"query": body.query, "top_k": body.top_k, "results": results}
     finally:
         conn.close()

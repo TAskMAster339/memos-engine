@@ -1,6 +1,8 @@
 import sqlite3
 from pathlib import Path
 
+import sqlite_vec
+
 from memos.core.models import CallEdge, File, Import, MemoryEntry, Project, Symbol
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -11,6 +13,9 @@ def get_connection(db_path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
+    conn.enable_load_extension(True)  # noqa: FBT003
+    sqlite_vec.load(conn)
+    conn.enable_load_extension(False)  # noqa: FBT003
     return conn
 
 
@@ -102,6 +107,14 @@ def get_file_by_path(
 
 def delete_file(conn: sqlite3.Connection, file_id: int) -> None:
     conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
+
+
+def remove_vec_for_file(conn: sqlite3.Connection, file_id: int) -> None:
+    conn.execute(
+        "DELETE FROM vec_symbols "
+        "WHERE rowid IN (SELECT id FROM symbols WHERE file_id = ?)",
+        (file_id,),
+    )
 
 
 # ── Symbol ───────────────────────────────────────────────────────────────────

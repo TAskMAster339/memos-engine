@@ -6,6 +6,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from memos.core.db import (
     delete_file,
@@ -17,6 +25,7 @@ from memos.core.db import (
     insert_import,
     insert_project,
     insert_symbol,
+    remove_vec_for_file,
     resolve_call_edges,
     run_migrations,
 )
@@ -25,6 +34,7 @@ from memos.indexer.diff import compute_file_hash, should_reindex
 from memos.indexer.go import GoIndexer
 from memos.indexer.typescript import TypeScriptIndexer
 from memos.query.core import find_calls, find_symbol, get_module
+from memos.search.sqlite_vec_store import SqliteVecStore
 
 EXTENSION_INDEXERS = {
     ".ts": TypeScriptIndexer(tsx=False),
@@ -60,7 +70,7 @@ def find_files(root: str) -> list[tuple[str, str]]:
     return sorted(files)
 
 
-def index_file(conn, project, full_path, rel_path, indexer, full):  # noqa: PLR0913
+def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True):  # noqa: PLR0913, C901
     current_hash = compute_file_hash(full_path)
     existing = get_file_by_path(conn, project.id, rel_path)
 
@@ -68,6 +78,7 @@ def index_file(conn, project, full_path, rel_path, indexer, full):  # noqa: PLR0
         return False
 
     if existing is not None:
+        remove_vec_for_file(conn, existing.id)
         delete_file(conn, existing.id)
 
     with Path(full_path).open(encoding="utf-8", errors="replace") as f:
@@ -85,6 +96,8 @@ def index_file(conn, project, full_path, rel_path, indexer, full):  # noqa: PLR0
     file = insert_file(conn, file)
 
     name_to_id = {}
+    embed_ids: list[int] = []
+    embed_texts: list[str] = []
     for ps in parse_result.symbols:
         sym = Symbol(
             file_id=file.id,
@@ -99,6 +112,13 @@ def index_file(conn, project, full_path, rel_path, indexer, full):  # noqa: PLR0
         sym = insert_symbol(conn, sym)
         name_to_id[ps.name] = sym.id
 
+        if embed:
+            embed_ids.append(sym.id)
+            text = f"{ps.name} {ps.kind}"
+            if ps.signature:
+                text += f" {ps.signature}"
+            embed_texts.append(text)
+
         if ps.parent_name:
             parent_id = name_to_id.get(ps.parent_name)
             if parent_id:
@@ -106,6 +126,14 @@ def index_file(conn, project, full_path, rel_path, indexer, full):  # noqa: PLR0
                     "UPDATE symbols SET parent_symbol_id = ? WHERE id = ?",
                     (parent_id, sym.id),
                 )
+
+    if embed and embed_ids:
+        from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+
+        embedder = FastEmbedEmbedding()
+        vecs = embedder.embed(embed_texts)
+        store = SqliteVecStore(conn)
+        store.add_batch(embed_ids, vecs)
 
     for pc in parse_result.calls:
         caller_id = name_to_id.get(pc.caller_name) if pc.caller_name else None
@@ -141,17 +169,54 @@ def cmd_index(args):
     project = get_or_create_project(conn, root)
     files = find_files(root)
 
+    console = Console()
     indexed = 0
-    for full_path, rel_path in files:
-        ext = Path(full_path).suffix.lower()
-        indexer = EXTENSION_INDEXERS.get(ext)
-        if indexer is None:
-            continue
-        try:
-            if index_file(conn, project, full_path, rel_path, indexer, args.full):
-                indexed += 1
-        except Exception as e:
-            print(f"  error: {rel_path}: {e}", file=sys.stderr)
+    errors = 0
+    embed_label = "[bright_black]no-embed[/]" if args.no_embed else ""
+
+    progress = Progress(
+        SpinnerColumn(spinner_name="dots"),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        TextColumn("[bright_black]{task.fields[info]}"),
+        console=console,
+        transient=False,
+    )
+
+    with progress:
+        task = progress.add_task(
+            f"[cyan]Indexing[/] {embed_label}",
+            total=len(files),
+            info="",
+        )
+
+        for full_path, rel_path in files:
+            ext = Path(full_path).suffix.lower()
+            indexer = EXTENSION_INDEXERS.get(ext)
+            if indexer is None:
+                progress.update(task, advance=1, info=f"[dim]skipped {rel_path}")
+                continue
+            try:
+                progress.update(task, info=f"[yellow]{rel_path}")
+                if index_file(
+                    conn,
+                    project,
+                    full_path,
+                    rel_path,
+                    indexer,
+                    args.full,
+                    embed=not args.no_embed,
+                ):
+                    indexed += 1
+                    progress.update(task, info=f"[green]{rel_path}")
+                else:
+                    progress.update(task, info=f"[dim]{rel_path} unchanged")
+            except Exception as e:
+                errors += 1
+                progress.update(task, info=f"[red]{rel_path} error: {e}")
+            progress.update(task, advance=1)
 
     if args.full:
         conn.execute(
@@ -171,9 +236,13 @@ def cmd_index(args):
     resolved = resolve_call_edges(conn, project.id)
     conn.commit()
     conn.close()
-    print(f"Indexed {indexed} of {len(files)} files")
+
+    summary = f"Indexed [green]{indexed}[/] of {len(files)} files"
+    if errors:
+        summary += f", [red]{errors} error(s)[/]"
     if total:
-        print(f"Resolved {resolved} of {total} call edges")
+        summary += f" | resolved [cyan]{resolved}[/] of {total} call edges"
+    console.print(summary)
 
 
 def _open_db(args):
@@ -227,6 +296,11 @@ def main():
     p_index = sub.add_parser("index", help="Index project files")
     p_index.add_argument("--path", default=".", help="Project root path")
     p_index.add_argument("--full", action="store_true", help="Force full reindex")
+    p_index.add_argument(
+        "--no-embed",
+        action="store_true",
+        help="Skip embedding generation",
+    )
     p_index.set_defaults(func=cmd_index)
 
     p_query = sub.add_parser("query", help="Query indexed data")

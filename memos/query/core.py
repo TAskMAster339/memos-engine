@@ -141,6 +141,47 @@ def find_calls_by_id(
     return [dict(r) for r in rows]
 
 
+def semantic_search(
+    conn,
+    query: str,
+    top_k: int = 10,
+    project_id: int | None = None,
+) -> list[dict[str, Any]]:
+    from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+    from memos.search.sqlite_vec_store import SqliteVecStore  # noqa: PLC0415
+
+    embedder = FastEmbedEmbedding()
+    store = SqliteVecStore(conn)
+
+    query_vec = embedder.embed_query(query)
+    results = store.search(query_vec, top_k=top_k)
+
+    if not results:
+        return []
+
+    symbol_ids = [sid for sid, _ in results]
+    score_map = dict(results)
+    placeholders = ",".join("?" for _ in symbol_ids)
+
+    sql = f"""
+        SELECT s.*, f.path AS file_path, f.language AS file_language
+        FROM symbols s
+        JOIN files f ON f.id = s.file_id
+        WHERE s.id IN ({placeholders})
+    """
+    params: list[Any] = symbol_ids
+    if project_id is not None:
+        sql += " AND f.project_id = ?"
+        params.append(project_id)
+
+    rows = conn.execute(sql, params).fetchall()
+    out = [dict(r) for r in rows]
+    for item in out:
+        item["score"] = score_map[item["id"]]
+    out.sort(key=lambda x: x["score"])
+    return out
+
+
 def get_module(conn, file_path: str, project_id: int) -> dict[str, Any]:
     file_row = conn.execute(
         "SELECT * FROM files WHERE project_id = ? AND path = ?",

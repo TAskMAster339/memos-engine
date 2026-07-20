@@ -1,5 +1,5 @@
 -- Schema reference: latest version of the database schema.
--- The authoritative copy is in migrations/0001_init.sql.
+-- The authoritative copy is in migrations/0001_init.sql and 0002_vec.sql.
 
 CREATE TABLE schema_version (version INTEGER NOT NULL);
 
@@ -65,3 +65,8 @@ CREATE TABLE memory_entries (
   created_at TEXT NOT NULL
 );
 CREATE INDEX idx_memory_scope ON memory_entries(scope_type, scope_id);
+
+-- vec0 virtual table for semantic search embeddings (384-dim all-MiniLM-L6-v2)
+CREATE VIRTUAL TABLE vec_symbols USING vec0(
+    embedding FLOAT[384]
+);

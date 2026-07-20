@@ -34,3 +34,9 @@ class ModuleResponse(BaseModel):
     symbols: list[dict[str, Any]]
     calls: list[dict[str, Any]]
     imports: list[dict[str, Any]]
+
+
+class SemanticSearchResponse(BaseModel):
+    query: str
+    top_k: int
+    results: list[dict[str, Any]]

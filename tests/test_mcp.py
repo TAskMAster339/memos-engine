@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+import memos.mcp.server as _srv
 from memos.core.db import (
     insert_call_edge,
     insert_file,
@@ -10,7 +11,7 @@ from memos.core.db import (
     insert_symbol,
 )
 from memos.core.models import CallEdge, File, Import, Project, Symbol
-from memos.mcp.server import _inject_conn, mcp
+from memos.mcp.server import _inject_conn, _projects, mcp
 
 
 @pytest.fixture
@@ -112,9 +113,13 @@ def seed(conn):
 
 @pytest.fixture
 def mcp_conn(conn, seed):
-    _inject_conn(conn, seed[0])
+    project = seed[0]
+    _inject_conn("/test/proj", conn, project)
+    _projects["/test/proj"] = (conn, project)
+    _srv._active_project = "/test/proj"  # noqa: SLF001
     yield
-    _inject_conn(None, None)
+    _projects.clear()
+    _srv._active_project = None  # noqa: SLF001
 
 
 @pytest.mark.anyio
@@ -250,6 +255,7 @@ async def test_list_projects_tool(mcp_conn):
 async def test_tool_registration(mcp_conn):
     results = await mcp.list_tools()
     names = [t.name for t in results]
+    assert "open_project" in names
     assert "find_symbol_tool" in names
     assert "find_calls_tool" in names
     assert "get_module_tool" in names

@@ -1,5 +1,7 @@
 # memos — Structural code index for AI agents
 
+[GitHub: TAskMAster339/memos-engine](https://github.com/TAskMAster339/memos-engine.git)
+
 `memos` builds a **structural index** (symbols, call edges, imports) of a
 TypeScript/TSX / Go codebase using tree-sitter and stores it in SQLite. It is the
 first layer of a larger *Memory OS* for AI coding agents — instead of
@@ -8,13 +10,28 @@ grep-ing text, agents query **structure** (definitions, callers, callees).
 ## Quick start
 
 ```bash
-uv sync                            # install deps
-uv run memos index --path .        # index current project
-uv run memos index --path . --full # force reindex (ignore hashes)
+# Clone and install globally
+git clone https://github.com/TAskMAster339/memos-engine.git
+cd memos-engine
+uv tool install -e .
+
+# Index a project
+memos index --path /path/to/your/project
+
+# Start the MCP server for AI agents
+memos serve-mcp
 ```
 
 Indexes are stored at `{project}/.memos/memory.db`. Re-run to sync changes
 (files are skipped if their content hash hasn't changed).
+
+Or using `uv run` without global install:
+
+```bash
+uv sync                            # install deps
+uv run memos index --path .        # index current project
+uv run memos index --path . --full # force reindex (ignore hashes)
+```
 
 ## Query
 
@@ -73,16 +90,37 @@ Uses `all-MiniLM-L6-v2` embeddings via fastembed (ONNX, no GPU required).
 
 ## MCP Server
 
-Start the Memory OS MCP server for AI agents:
+The MCP server exposes the indexed codebase to AI agents. Install globally:
 
 ```bash
-uv run memos serve-mcp --path /project
+uv tool install -e ~/memos-engine
+memos serve-mcp
 ```
+
+Or without global install:
+
+```bash
+uv run memos serve-mcp
+```
+
+The server starts without a project. Use the `open_project` tool to select a project:
+
+```json
+{
+  "tool": "open_project",
+  "arguments": {
+    "path": "/path/to/your/project"
+  }
+}
+```
+
+The server auto-indexes the project if it hasn't been indexed yet. Multiple projects can be opened and queried in the same session without restarting the server.
 
 Available tools:
 
 | Tool | Description |
 |------|-------------|
+| `open_project` | Open a project by path (auto-indexes if needed) |
 | `find_symbol_tool` | Search symbols by name (+ kind, file filter) |
 | `find_calls_tool` | Find callers or callees of a symbol |
 | `get_module_tool` | Full file info (symbols, calls, imports) |
@@ -90,20 +128,43 @@ Available tools:
 | `list_files_tool` | List all indexed files |
 | `list_symbols_tool` | List all indexed symbols |
 | `list_projects_tool` | Current project info with stats |
+| `memory_add_note` | Add a note to episodic memory |
+| `get_memories` | Retrieve memory entries |
+
+Each query tool accepts an optional `project` parameter to target a specific opened project (defaults to the most recently opened one).
+
+### Integration with OpenCode
+
+Add to your OpenCode MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "memos": {
+      "command": [
+        "memos",
+        "serve-mcp"
+      ]
+    }
+  }
+}
+```
+
+Then use `open_project` within OpenCode to select your project.
+
+### Integration with Claude Desktop
 
 Configure in `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "memory-os": {
-      "command": "uv",
-      "args": ["run", "memos", "serve-mcp", "--path", "/ABSOLUTE/PATH/TO/PROJECT"],
-      "env": {}
+    "memos": {
+      "command": "memos",
+      "args": ["serve-mcp"]
     }
   }
 }
-```
 
 ## Test
 

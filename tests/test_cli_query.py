@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from memos.cli.main import EXTENSION_INDEXERS, find_files, get_or_create_project, index_file
+from memos.cli.main import (
+    EXTENSION_INDEXERS,
+    find_files,
+    get_or_create_project,
+    index_file,
+)
 from memos.core.db import get_connection, run_migrations
 from memos.query.core import find_calls, find_symbol, get_module
 
@@ -24,7 +29,7 @@ def _index_fixture(conn, fixture_root):
 class TestQueryIntegration:
     def test_query_ts_symbol(self):
         conn = get_connection(":memory:")
-        project = _index_fixture(conn, TS_FIXTURE)
+        _index_fixture(conn, TS_FIXTURE)
 
         results = find_symbol(conn, "greet")
         assert len(results) == 1

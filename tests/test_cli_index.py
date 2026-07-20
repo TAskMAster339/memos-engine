@@ -1,13 +1,13 @@
-import os
-import shutil
-import tempfile
 from pathlib import Path
 
-from memos.cli.main import EXTENSION_INDEXERS
-from memos.core.db import get_connection, run_migrations
+from memos.cli.main import (
+    EXTENSION_INDEXERS,
+    find_files,
+    get_or_create_project,
+    index_file,
+)
+from memos.core.db import get_connection, resolve_call_edges, run_migrations
 from memos.indexer.typescript import TypeScriptIndexer
-from memos.indexer.diff import compute_file_hash
-from memos.cli.main import find_files, get_or_create_project, index_file
 
 TS_FIXTURE = Path(__file__).parent / "fixtures" / "typescript_mini"
 GO_FIXTURE = Path(__file__).parent / "fixtures" / "go_mini"
@@ -44,7 +44,7 @@ def test_index_file_adds_symbols():
     assert changed is True
 
     rows = conn.execute(
-        "SELECT name, kind, exported FROM symbols ORDER BY name"
+        "SELECT name, kind, exported FROM symbols ORDER BY name",
     ).fetchall()
     names = [r["name"] for r in rows]
     assert "greet" in names
@@ -88,7 +88,7 @@ def test_index_go_file():
     assert changed is True
 
     rows = conn.execute(
-        "SELECT name, kind, exported FROM symbols ORDER BY name"
+        "SELECT name, kind, exported FROM symbols ORDER BY name",
     ).fetchall()
     names = [r["name"] for r in rows]
     assert "defaultName" in names
@@ -126,7 +126,7 @@ def test_index_ts_project():
     project = get_or_create_project(conn, str(TS_FIXTURE))
 
     for full, rel in find_files(str(TS_FIXTURE)):
-        ext = os.path.splitext(full)[1]
+        ext = Path(full).suffix
         if ext == ".ts":
             indexer = EXTENSION_INDEXERS.get(ext)
             index_file(conn, project, full, rel, indexer, full=True)
@@ -149,18 +149,17 @@ def test_index_ts_project_resolves_calls():
 
     project = get_or_create_project(conn, str(TS_FIXTURE))
     for full, rel in find_files(str(TS_FIXTURE)):
-        ext = os.path.splitext(full)[1]
+        ext = Path(full).suffix
         if ext == ".ts":
             indexer = EXTENSION_INDEXERS.get(ext)
             index_file(conn, project, full, rel, indexer, full=True)
 
-    from memos.core.db import resolve_call_edges
     resolved = resolve_call_edges(conn, project.id)
 
     assert resolved >= 1
 
     row = conn.execute(
-        "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'"
+        "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'",
     ).fetchone()
     assert row is not None
     assert row["callee_symbol_id"] is not None
@@ -175,7 +174,7 @@ def test_index_go_project():
     project = get_or_create_project(conn, str(GO_FIXTURE))
 
     for full, rel in find_files(str(GO_FIXTURE)):
-        ext = os.path.splitext(full)[1]
+        ext = Path(full).suffix
         if ext == ".go":
             indexer = EXTENSION_INDEXERS.get(ext)
             index_file(conn, project, full, rel, indexer, full=True)
@@ -198,18 +197,17 @@ def test_index_go_project_resolves_calls():
 
     project = get_or_create_project(conn, str(GO_FIXTURE))
     for full, rel in find_files(str(GO_FIXTURE)):
-        ext = os.path.splitext(full)[1]
+        ext = Path(full).suffix
         if ext == ".go":
             indexer = EXTENSION_INDEXERS.get(ext)
             index_file(conn, project, full, rel, indexer, full=True)
 
-    from memos.core.db import resolve_call_edges
     resolved = resolve_call_edges(conn, project.id)
 
     assert resolved >= 2
 
     row = conn.execute(
-        "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'"
+        "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'",
     ).fetchone()
     assert row is not None
     assert row["callee_symbol_id"] is not None

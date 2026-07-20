@@ -38,6 +38,28 @@ uv run memos query module src/index.ts
 All query commands output JSON and accept `--path <project_root>` to point at
 an indexed project (defaults to current directory).
 
+## HTTP API
+
+Start the FastAPI server on an indexed project:
+
+```bash
+# via CLI
+uv run memos serve --path /project --port 8000
+
+# or via uvicorn directly
+MEMOS_PROJECT_PATH=/project uv run uvicorn memos.api.main:app
+```
+
+Endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/symbols?name=greet&kind=function` | Find symbols by name |
+| GET | `/symbols/{id}/calls?direction=callers\|callees` | Find callers/callees of a symbol |
+| GET | `/modules/{path}` | Show everything for a file |
+
+All endpoints return JSON. Set `MEMOS_PROJECT_PATH` (defaults to `.`).
+
 ## Test
 
 ```bash

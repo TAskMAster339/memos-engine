@@ -1,14 +1,12 @@
-from typing import Any, Optional
-
-from memos.core.models import CallEdge, File, Import, Symbol
+from typing import Any
 
 
 def find_symbol(
     conn,
     name: str,
-    kind: Optional[str] = None,
-    file_path: Optional[str] = None,
-    project_id: Optional[int] = None,
+    kind: str | None = None,
+    file_path: str | None = None,
+    project_id: int | None = None,
 ) -> list[dict[str, Any]]:
     clauses = ["s.name = ?"]
     params: list[Any] = [name]
@@ -42,7 +40,7 @@ def find_calls(
     conn,
     symbol_name: str,
     direction: str = "callers",
-    project_id: Optional[int] = None,
+    project_id: int | None = None,
 ) -> list[dict[str, Any]]:
     if direction == "callers":
         sql = """
@@ -87,9 +85,59 @@ def find_calls(
             params.append(project_id)
         sql += " ORDER BY cf.path, edge.line"
     else:
-        raise ValueError(f"invalid direction: {direction!r} (expected 'callers' or 'callees')")
+        raise ValueError(
+            f"invalid direction: {direction!r} (expected 'callers' or 'callees')",
+        )
 
     rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def find_calls_by_id(
+    conn,
+    symbol_id: int,
+    direction: str = "callers",
+) -> list[dict[str, Any]]:
+    if direction == "callers":
+        sql = """
+            SELECT
+                caller.name AS caller_name,
+                caller.kind AS caller_kind,
+                caller.id AS caller_symbol_id,
+                edge.callee_name,
+                edge.line,
+                cf.path AS file,
+                cf.id AS file_id
+            FROM call_edges edge
+            JOIN symbols caller ON caller.id = edge.caller_symbol_id
+            JOIN files cf ON cf.id = caller.file_id
+            WHERE edge.callee_symbol_id = ?
+            ORDER BY cf.path, edge.line
+        """
+    elif direction == "callees":
+        sql = """
+            SELECT
+                caller.name AS caller_name,
+                caller.kind AS caller_kind,
+                caller.id AS caller_symbol_id,
+                edge.callee_name,
+                COALESCE(callee.name, '') AS callee_resolved_name,
+                edge.line,
+                cf.path AS file,
+                cf.id AS file_id
+            FROM call_edges edge
+            JOIN symbols caller ON caller.id = edge.caller_symbol_id
+            JOIN files cf ON cf.id = caller.file_id
+            LEFT JOIN symbols callee ON callee.id = edge.callee_symbol_id
+            WHERE caller.id = ?
+            ORDER BY cf.path, edge.line
+        """
+    else:
+        raise ValueError(
+            f"invalid direction: {direction!r} (expected 'callers' or 'callees')",
+        )
+
+    rows = conn.execute(sql, [symbol_id]).fetchall()
     return [dict(r) for r in rows]
 
 

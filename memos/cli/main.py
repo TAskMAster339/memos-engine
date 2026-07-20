@@ -2,23 +2,25 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
+import uvicorn
+
 from memos.core.db import (
+    delete_file,
     get_connection,
-    run_migrations,
+    get_file_by_path,
+    get_project_by_root,
     insert_call_edge,
     insert_file,
     insert_import,
     insert_project,
     insert_symbol,
-    delete_file,
-    get_file_by_path,
-    get_project,
     resolve_call_edges,
+    run_migrations,
 )
-from memos.core.models import Project, File, Symbol, CallEdge, Import
+from memos.core.models import CallEdge, File, Import, Project, Symbol
 from memos.indexer.diff import compute_file_hash, should_reindex
 from memos.indexer.go import GoIndexer
 from memos.indexer.typescript import TypeScriptIndexer
@@ -39,20 +41,10 @@ def get_or_create_project(conn, root_path: str) -> Project:
         return existing
     project = Project(
         root_path=root_path,
-        name=os.path.basename(root_path),
-        created_at=datetime.now(timezone.utc).isoformat(),
+        name=Path(root_path).name,
+        created_at=datetime.now(UTC).isoformat(),
     )
     return insert_project(conn, project)
-
-
-def get_project_by_root(conn, root_path: str):
-    cur = conn.execute(
-        "SELECT * FROM projects WHERE root_path = ?", (root_path,)
-    )
-    row = cur.fetchone()
-    if row is None:
-        return None
-    return Project.model_validate(dict(row))
 
 
 def find_files(root: str) -> list[tuple[str, str]]:
@@ -60,25 +52,25 @@ def find_files(root: str) -> list[tuple[str, str]]:
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for fn in filenames:
-            ext = os.path.splitext(fn)[1].lower()
+            ext = Path(fn).suffix.lower()
             if ext in EXTENSION_INDEXERS:
-                full = os.path.join(dirpath, fn)
+                full = str(Path(dirpath) / fn)
                 rel = os.path.relpath(full, root)
                 files.append((full, rel))
     return sorted(files)
 
 
-def index_file(conn, project, full_path, rel_path, indexer, full):
+def index_file(conn, project, full_path, rel_path, indexer, full):  # noqa: PLR0913
     current_hash = compute_file_hash(full_path)
     existing = get_file_by_path(conn, project.id, rel_path)
 
-    if not should_reindex(existing, current_hash, full):
+    if not should_reindex(existing, current_hash, full=full):
         return False
 
     if existing is not None:
         delete_file(conn, existing.id)
 
-    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+    with Path(full_path).open(encoding="utf-8", errors="replace") as f:
         source = f.read()
 
     parse_result = indexer.parse(source, rel_path)
@@ -88,7 +80,7 @@ def index_file(conn, project, full_path, rel_path, indexer, full):
         path=rel_path,
         language=indexer.language(),
         content_hash=current_hash,
-        mtime=os.path.getmtime(full_path),
+        mtime=Path(full_path).stat().st_mtime,
     )
     file = insert_file(conn, file)
 
@@ -137,7 +129,7 @@ def index_file(conn, project, full_path, rel_path, indexer, full):
 
 
 def cmd_index(args):
-    root = os.path.abspath(args.path)
+    root = str(Path(args.path).resolve())
 
     memos_dir = Path(root) / ".memos"
     memos_dir.mkdir(parents=True, exist_ok=True)
@@ -151,7 +143,7 @@ def cmd_index(args):
 
     indexed = 0
     for full_path, rel_path in files:
-        ext = os.path.splitext(full_path)[1].lower()
+        ext = Path(full_path).suffix.lower()
         indexer = EXTENSION_INDEXERS.get(ext)
         if indexer is None:
             continue
@@ -164,7 +156,7 @@ def cmd_index(args):
     if args.full:
         conn.execute(
             "UPDATE files SET mtime = ? WHERE project_id = ?",
-            (datetime.now(timezone.utc).timestamp(), project.id),
+            (datetime.now(UTC).timestamp(), project.id),
         )
 
     conn.commit()
@@ -173,7 +165,8 @@ def cmd_index(args):
         "SELECT COUNT(*) FROM call_edges ce "
         "JOIN symbols s ON s.id = ce.caller_symbol_id "
         "JOIN files f ON f.id = s.file_id "
-        "WHERE f.project_id = ?", (project.id,)
+        "WHERE f.project_id = ?",
+        (project.id,),
     ).fetchone()[0]
     resolved = resolve_call_edges(conn, project.id)
     conn.commit()
@@ -184,10 +177,13 @@ def cmd_index(args):
 
 
 def _open_db(args):
-    root = os.path.abspath(args.path)
+    root = str(Path(args.path).resolve())
     db_path = str(Path(root) / ".memos" / "memory.db")
-    if not os.path.exists(db_path):
-        print("error: no .memos/memory.db found — run 'memos index' first", file=sys.stderr)
+    if not Path(db_path).exists():
+        print(
+            "error: no .memos/memory.db found — run 'memos index' first",
+            file=sys.stderr,
+        )
         sys.exit(1)
     conn = get_connection(db_path)
     run_migrations(conn)
@@ -199,14 +195,14 @@ def _open_db(args):
 
 
 def cmd_query_symbol(args):
-    conn, project = _open_db(args)
+    conn, _project = _open_db(args)
     results = find_symbol(conn, args.name, kind=args.kind)
     print(json.dumps(results, indent=2, default=str))
     conn.close()
 
 
 def cmd_query_calls(args):
-    conn, project = _open_db(args)
+    conn, _project = _open_db(args)
     results = find_calls(conn, args.name, direction=args.direction)
     print(json.dumps(results, indent=2, default=str))
     conn.close()
@@ -217,6 +213,11 @@ def cmd_query_module(args):
     results = get_module(conn, args.module_path, project.id)
     print(json.dumps(results, indent=2, default=str))
     conn.close()
+
+
+def cmd_serve(args):
+    os.environ["MEMOS_PROJECT_PATH"] = str(Path(args.path).resolve())
+    uvicorn.run("memos.api.main:app", host=args.host, port=args.port)
 
 
 def main():
@@ -233,21 +234,37 @@ def main():
 
     p_sym = qsub.add_parser("symbol", help="Find symbols by name")
     p_sym.add_argument("name", help="Symbol name to search")
-    p_sym.add_argument("--kind", help="Filter by symbol kind (function, class, const, etc.)")
+    p_sym.add_argument(
+        "--kind",
+        help="Filter by symbol kind (function, class, const, etc.)",
+    )
     p_sym.add_argument("--path", default=".", help="Project root path")
     p_sym.set_defaults(func=cmd_query_symbol)
 
     p_calls = qsub.add_parser("calls", help="Find callers or callees of a symbol")
     p_calls.add_argument("name", help="Symbol name")
-    p_calls.add_argument("--direction", default="callers", choices=["callers", "callees"],
-                         help="Direction: callers (who calls this) or callees (what this calls)")
+    p_calls.add_argument(
+        "--direction",
+        default="callers",
+        choices=["callers", "callees"],
+        help="Direction: callers (who calls this) or callees (what this calls)",
+    )
     p_calls.add_argument("--path", default=".", help="Project root path")
     p_calls.set_defaults(func=cmd_query_calls)
 
-    p_mod = qsub.add_parser("module", help="Show everything for a file (symbols, calls, imports)")
+    p_mod = qsub.add_parser(
+        "module",
+        help="Show everything for a file (symbols, calls, imports)",
+    )
     p_mod.add_argument("module_path", metavar="path", help="Relative file path")
     p_mod.add_argument("--path", default=".", help="Project root path")
     p_mod.set_defaults(func=cmd_query_module)
+
+    p_serve = sub.add_parser("serve", help="Start the HTTP API server")
+    p_serve.add_argument("--path", default=".", help="Project root path")
+    p_serve.add_argument("--host", default="0.0.0.0", help="Bind host")
+    p_serve.add_argument("--port", type=int, default=8000, help="Bind port")
+    p_serve.set_defaults(func=cmd_serve)
 
     args = parser.parse_args()
     args.func(args)

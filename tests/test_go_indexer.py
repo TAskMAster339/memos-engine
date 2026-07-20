@@ -101,9 +101,9 @@ def test_parse_var():
 def test_parse_short_var():
     src = "package p\nfunc f() { x := 1 }\n"
     r = _I().parse(src, "main.go")
-    vars = [s for s in r.symbols if s.kind == "var" and s.name == "x"]
-    assert len(vars) == 1
-    assert vars[0].exported is False
+    var_syms = [s for s in r.symbols if s.kind == "var" and s.name == "x"]
+    assert len(var_syms) == 1
+    assert var_syms[0].exported is False
 
 
 def test_parse_calls():

@@ -31,7 +31,9 @@ memos/
     go.py           # GoIndexer (tree-sitter, export by name case)
     diff.py         # compute_file_hash, should_reindex
   query/
-    core.py         # find_symbol, find_calls, get_module — pure query layer over db
+    core.py         # find_symbol, find_calls, get_module, find_calls_by_id — pure query layer over db
+  api/
+    main.py         # FastAPI app — thin adapter over query/core.py
   cli/
     main.py         # argparse: "memos index [--path .] [--full]"
 tests/
@@ -45,6 +47,7 @@ tests/
   test_resolver.py            # 7 unit tests on call-edge resolution
   test_query.py               # 12 unit tests on query/core.py
   test_cli_query.py           # 7 integration tests: query flow (TS + Go)
+  test_api.py                 # 7 integration tests: FastAPI endpoints
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
     go_mini/src/            # 3 .go files for integration testing
@@ -55,7 +58,9 @@ tests/
 - **pydantic** — all CRUD returns models, not raw rows
 - **tree-sitter + tree-sitter-typescript + tree-sitter-go** — AST parsing (.ts, .tsx, .go)
 - **stdlib sqlite3** — connection mgmt, WAL journal, FK enforcement
+- **fastapi + uvicorn** — HTTP API (Iteration 2, Task 6)
 - **pytest** (dev)
+- **httpx** (dev, for TestClient)
 - **hatchling** (build)
 
 ## Architecture conventions
@@ -74,7 +79,6 @@ tests/
 
 ## What does not exist yet
 
-- FastAPI service — Iteration 2
 - Semantic search (sqlite-vec + sentence-transformers) — Task 7
 - MCP server — Iteration 3
 - LLM summary generation — Iteration 4
@@ -87,7 +91,7 @@ tests/
 3. ✅ `indexer/go.py`
 4. ✅ `query/core.py` (find_symbol, find_calls, get_module) + CLI `query`
 5. ✅ Call-edge resolution (second pass) + cross-file tests
-6. FastAPI wrapper
+6. ✅ FastAPI wrapper
 7. Semantic search (sqlite-vec + sentence-transformers)
 8. MCP server
 9. `memory_entries` write-path via `memory_add_note`

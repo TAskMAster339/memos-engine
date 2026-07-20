@@ -33,8 +33,11 @@ def test_file_crud(conn):
     p = insert_project(conn, Project(root_path="/test", name="tp", created_at="now"))
 
     f = File(
-        project_id=p.id, path="src/main.ts", language="typescript",
-        content_hash="abc123", mtime=1000.0,
+        project_id=p.id,
+        path="src/main.ts",
+        language="typescript",
+        content_hash="abc123",
+        mtime=1000.0,
     )
     f2 = insert_file(conn, f)
     assert f2.id is not None
@@ -50,21 +53,38 @@ def test_file_crud(conn):
 
 def test_symbol_crud(conn):
     p = insert_project(conn, Project(root_path="/test", name="tp", created_at="now"))
-    f = insert_file(conn, File(
-        project_id=p.id, path="lib.ts", language="typescript", content_hash="def",
-    ))
+    f = insert_file(
+        conn,
+        File(
+            project_id=p.id,
+            path="lib.ts",
+            language="typescript",
+            content_hash="def",
+        ),
+    )
 
     s = Symbol(
-        file_id=f.id, name="hello", kind="function",
-        start_line=1, end_line=5, exported=True, content_hash="hash1",
+        file_id=f.id,
+        name="hello",
+        kind="function",
+        start_line=1,
+        end_line=5,
+        exported=True,
+        content_hash="hash1",
         signature="hello(): void",
     )
     s2 = insert_symbol(conn, s)
     assert s2.id is not None
 
     child = Symbol(
-        file_id=f.id, parent_symbol_id=s2.id, name="inner", kind="function",
-        start_line=2, end_line=3, exported=False, content_hash="hash2",
+        file_id=f.id,
+        parent_symbol_id=s2.id,
+        name="inner",
+        kind="function",
+        start_line=2,
+        end_line=3,
+        exported=False,
+        content_hash="hash2",
     )
     child2 = insert_symbol(conn, child)
     assert child2.parent_symbol_id == s2.id
@@ -79,21 +99,45 @@ def test_symbol_crud(conn):
 
 def test_call_edge_crud(conn):
     p = insert_project(conn, Project(root_path="/test", name="tp", created_at="now"))
-    f = insert_file(conn, File(
-        project_id=p.id, path="a.ts", language="typescript", content_hash="h1",
-    ))
-    caller = insert_symbol(conn, Symbol(
-        file_id=f.id, name="caller", kind="function",
-        start_line=1, end_line=3, exported=True, content_hash="hc",
-    ))
-    callee = insert_symbol(conn, Symbol(
-        file_id=f.id, name="callee", kind="function",
-        start_line=5, end_line=7, exported=True, content_hash="hl",
-    ))
+    f = insert_file(
+        conn,
+        File(
+            project_id=p.id,
+            path="a.ts",
+            language="typescript",
+            content_hash="h1",
+        ),
+    )
+    caller = insert_symbol(
+        conn,
+        Symbol(
+            file_id=f.id,
+            name="caller",
+            kind="function",
+            start_line=1,
+            end_line=3,
+            exported=True,
+            content_hash="hc",
+        ),
+    )
+    callee = insert_symbol(
+        conn,
+        Symbol(
+            file_id=f.id,
+            name="callee",
+            kind="function",
+            start_line=5,
+            end_line=7,
+            exported=True,
+            content_hash="hl",
+        ),
+    )
 
     edge = CallEdge(
-        caller_symbol_id=caller.id, callee_name="callee",
-        callee_symbol_id=callee.id, line=2,
+        caller_symbol_id=caller.id,
+        callee_name="callee",
+        callee_symbol_id=callee.id,
+        line=2,
     )
     e2 = insert_call_edge(conn, edge)
     assert e2.id is not None
@@ -105,12 +149,24 @@ def test_call_edge_crud(conn):
 
 def test_import_crud(conn):
     p = insert_project(conn, Project(root_path="/test", name="tp", created_at="now"))
-    f = insert_file(conn, File(
-        project_id=p.id, path="main.ts", language="typescript", content_hash="h1",
-    ))
-    f2 = insert_file(conn, File(
-        project_id=p.id, path="utils.ts", language="typescript", content_hash="h2",
-    ))
+    f = insert_file(
+        conn,
+        File(
+            project_id=p.id,
+            path="main.ts",
+            language="typescript",
+            content_hash="h1",
+        ),
+    )
+    f2 = insert_file(
+        conn,
+        File(
+            project_id=p.id,
+            path="utils.ts",
+            language="typescript",
+            content_hash="h2",
+        ),
+    )
 
     imp = Import(file_id=f.id, imported_path="./utils", resolved_file_id=f2.id)
     imp2 = insert_import(conn, imp)
@@ -123,18 +179,37 @@ def test_import_crud(conn):
 
 def test_memory_entry_crud(conn):
     p = insert_project(conn, Project(root_path="/test", name="tp", created_at="now"))
-    f = insert_file(conn, File(
-        project_id=p.id, path="x.ts", language="typescript", content_hash="h",
-    ))
-    sym = insert_symbol(conn, Symbol(
-        file_id=f.id, name="foo", kind="function",
-        start_line=1, end_line=2, exported=False, content_hash="hsym",
-    ))
+    f = insert_file(
+        conn,
+        File(
+            project_id=p.id,
+            path="x.ts",
+            language="typescript",
+            content_hash="h",
+        ),
+    )
+    sym = insert_symbol(
+        conn,
+        Symbol(
+            file_id=f.id,
+            name="foo",
+            kind="function",
+            start_line=1,
+            end_line=2,
+            exported=False,
+            content_hash="hsym",
+        ),
+    )
 
     entry = MemoryEntry(
-        project_id=p.id, scope_type="symbol", scope_id=sym.id,
-        kind="summary", content="does foo", source="llm",
-        source_hash="hsym", created_at="now",
+        project_id=p.id,
+        scope_type="symbol",
+        scope_id=sym.id,
+        kind="summary",
+        content="does foo",
+        source="llm",
+        source_hash="hsym",
+        created_at="now",
     )
     e2 = insert_memory_entry(conn, entry)
     assert e2.id is not None
@@ -149,13 +224,27 @@ def test_memory_entry_crud(conn):
 
 def test_cascade_delete_file_removes_symbols(conn):
     p = insert_project(conn, Project(root_path="/test", name="tp", created_at="now"))
-    f = insert_file(conn, File(
-        project_id=p.id, path="del.ts", language="typescript", content_hash="del",
-    ))
-    sym = insert_symbol(conn, Symbol(
-        file_id=f.id, name="goner", kind="function",
-        start_line=1, end_line=2, exported=False, content_hash="hg",
-    ))
+    f = insert_file(
+        conn,
+        File(
+            project_id=p.id,
+            path="del.ts",
+            language="typescript",
+            content_hash="del",
+        ),
+    )
+    sym = insert_symbol(
+        conn,
+        Symbol(
+            file_id=f.id,
+            name="goner",
+            kind="function",
+            start_line=1,
+            end_line=2,
+            exported=False,
+            content_hash="hg",
+        ),
+    )
     sym_id = sym.id
 
     delete_file(conn, f.id)
@@ -165,6 +254,7 @@ def test_cascade_delete_file_removes_symbols(conn):
     assert len(get_symbols_for_file(conn, f.id)) == 0
 
     remaining = conn.execute(
-        "SELECT COUNT(*) FROM symbols WHERE id = ?", (sym_id,)
+        "SELECT COUNT(*) FROM symbols WHERE id = ?",
+        (sym_id,),
     ).fetchone()[0]
     assert remaining == 0

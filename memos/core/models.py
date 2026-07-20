@@ -1,34 +1,33 @@
-from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
 class Project(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: Optional[int] = None
+    id: int | None = None
     root_path: str
-    name: Optional[str] = None
+    name: str | None = None
     created_at: str
 
 
 class File(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: Optional[int] = None
+    id: int | None = None
     project_id: int
     path: str
     language: str
     content_hash: str
-    mtime: Optional[float] = None
-    last_indexed_at: Optional[str] = None
+    mtime: float | None = None
+    last_indexed_at: str | None = None
 
 
 class Symbol(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: Optional[int] = None
+    id: int | None = None
     file_id: int
-    parent_symbol_id: Optional[int] = None
+    parent_symbol_id: int | None = None
     name: str
     kind: str
-    signature: Optional[str] = None
+    signature: str | None = None
     start_line: int
     end_line: int
     exported: bool = False
@@ -37,29 +36,29 @@ class Symbol(BaseModel):
 
 class CallEdge(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: Optional[int] = None
+    id: int | None = None
     caller_symbol_id: int
     callee_name: str
-    callee_symbol_id: Optional[int] = None
+    callee_symbol_id: int | None = None
     line: int
 
 
 class Import(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: Optional[int] = None
+    id: int | None = None
     file_id: int
     imported_path: str
-    resolved_file_id: Optional[int] = None
+    resolved_file_id: int | None = None
 
 
 class MemoryEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: Optional[int] = None
+    id: int | None = None
     project_id: int
     scope_type: str
-    scope_id: Optional[int] = None
+    scope_id: int | None = None
     kind: str
     content: str
     source: str
-    source_hash: Optional[str] = None
+    source_hash: str | None = None
     created_at: str

@@ -1,14 +1,14 @@
 import hashlib
 
-from tree_sitter import Parser, Language
 import tree_sitter_go
+from tree_sitter import Language, Parser
 
 from memos.indexer.base import (
     LanguageIndexer,
-    ParseResult,
-    ParsedSymbol,
     ParsedCall,
     ParsedImport,
+    ParsedSymbol,
+    ParseResult,
 )
 
 _GO_LANG = Language(tree_sitter_go.language())
@@ -29,7 +29,7 @@ class GoIndexer(LanguageIndexer):
         self._walk(tree.root_node, source_bytes, result)
         return result
 
-    def _walk(self, node, source, result, scope=None):
+    def _walk(self, node, source, result, scope=None):  # noqa: C901, PLR0911, PLR0912, PLR0915
         t = node.type
 
         if t == "function_declaration":
@@ -46,7 +46,14 @@ class GoIndexer(LanguageIndexer):
             name = self._node_text(name_node, source) if name_node else None
             if name:
                 parent_name = self._receiver_type(node, source)
-                self._add_symbol(node, source, result, "method", name, parent_name=parent_name)
+                self._add_symbol(
+                    node,
+                    source,
+                    result,
+                    "method",
+                    name,
+                    parent_name=parent_name,
+                )
                 full_scope = f"{parent_name}.{name}" if parent_name else name
                 for child in node.children:
                     self._walk(child, source, result, scope=full_scope)
@@ -63,10 +70,7 @@ class GoIndexer(LanguageIndexer):
             name = self._node_text(name_node, source) if name_node else None
             if name:
                 type_node = node.child_by_field_name("type")
-                if type_node:
-                    kind = self._type_spec_kind(type_node)
-                else:
-                    kind = "type"
+                kind = self._type_spec_kind(type_node) if type_node else "type"
                 self._add_symbol(node, source, result, kind, name)
             return
 
@@ -141,8 +145,8 @@ class GoIndexer(LanguageIndexer):
             return "interface"
         return "type"
 
-    def _add_symbol(self, node, source, result, kind, name, parent_name=None):
-        text = source[node.start_byte:node.end_byte].decode("utf-8")
+    def _add_symbol(self, node, source, result, kind, name, parent_name=None):  # noqa: PLR0913
+        text = source[node.start_byte : node.end_byte].decode("utf-8")
         content_hash = hashlib.sha256(text.encode()).hexdigest()
         exported = name[0].isupper() if name else False
 
@@ -152,16 +156,18 @@ class GoIndexer(LanguageIndexer):
             sig = text[:brace].strip()
         sig = sig.strip() or None
 
-        result.symbols.append(ParsedSymbol(
-            name=name,
-            kind=kind,
-            signature=sig,
-            start_line=node.start_point[0] + 1,
-            end_line=node.end_point[0] + 1,
-            exported=exported,
-            content_hash=content_hash,
-            parent_name=parent_name,
-        ))
+        result.symbols.append(
+            ParsedSymbol(
+                name=name,
+                kind=kind,
+                signature=sig,
+                start_line=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+                exported=exported,
+                content_hash=content_hash,
+                parent_name=parent_name,
+            ),
+        )
 
     def _add_call(self, node, source, result, caller_name):
         func_node = node.child_by_field_name("function")
@@ -169,17 +175,17 @@ class GoIndexer(LanguageIndexer):
             func_node = node.children[0] if node.children else None
         if func_node is None:
             return
-        if func_node.type == "identifier":
-            name = self._node_text(func_node, source)
-        elif func_node.type == "selector_expression":
+        if func_node.type in ("identifier", "selector_expression"):
             name = self._node_text(func_node, source)
         else:
             return
-        result.calls.append(ParsedCall(
-            caller_name=caller_name,
-            callee_name=name,
-            line=node.start_point[0] + 1,
-        ))
+        result.calls.append(
+            ParsedCall(
+                caller_name=caller_name,
+                callee_name=name,
+                line=node.start_point[0] + 1,
+            ),
+        )
 
     def _add_imports(self, node, source, result):
         for child in node.children:
@@ -187,7 +193,7 @@ class GoIndexer(LanguageIndexer):
                 path_node = child.child_by_field_name("path")
                 if path_node:
                     raw = self._node_text(path_node, source)
-                    path = raw.strip("\"")
+                    path = raw.strip('"')
                     result.imports.append(ParsedImport(imported_path=path))
             elif child.type == "import_spec_list":
                 for spec in child.children:
@@ -195,9 +201,9 @@ class GoIndexer(LanguageIndexer):
                         path_node = spec.child_by_field_name("path")
                         if path_node:
                             raw = self._node_text(path_node, source)
-                            path = raw.strip("\"")
+                            path = raw.strip('"')
                             result.imports.append(ParsedImport(imported_path=path))
 
     @staticmethod
     def _node_text(node, source):
-        return source[node.start_byte:node.end_byte].decode("utf-8")
+        return source[node.start_byte : node.end_byte].decode("utf-8")

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from memos.core.db import (
     get_connection,
@@ -16,20 +16,39 @@ def _seed_two_files(conn):
     project = Project(
         root_path="/test/p",
         name="p",
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     project = insert_project(conn, project)
 
     fa = insert_file(
-        conn, File(project_id=project.id, path="src/a.ts", language="typescript", content_hash="ha")
+        conn,
+        File(
+            project_id=project.id,
+            path="src/a.ts",
+            language="typescript",
+            content_hash="ha",
+        ),
     )
     fb = insert_file(
-        conn, File(project_id=project.id, path="src/b.ts", language="typescript", content_hash="hb")
+        conn,
+        File(
+            project_id=project.id,
+            path="src/b.ts",
+            language="typescript",
+            content_hash="hb",
+        ),
     )
 
     sym_a = insert_symbol(
         conn,
-        Symbol(file_id=fa.id, name="main", kind="function", start_line=1, end_line=5, content_hash="h1"),
+        Symbol(
+            file_id=fa.id,
+            name="main",
+            kind="function",
+            start_line=1,
+            end_line=5,
+            content_hash="h1",
+        ),
     )
     sym_b_greet = insert_symbol(
         conn,
@@ -58,21 +77,41 @@ def _seed_same_file(conn):
     project = Project(
         root_path="/test/p",
         name="p",
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     project = insert_project(conn, project)
 
     fa = insert_file(
-        conn, File(project_id=project.id, path="src/a.ts", language="typescript", content_hash="ha")
+        conn,
+        File(
+            project_id=project.id,
+            path="src/a.ts",
+            language="typescript",
+            content_hash="ha",
+        ),
     )
 
     sym_caller = insert_symbol(
         conn,
-        Symbol(file_id=fa.id, name="caller", kind="function", start_line=1, end_line=5, content_hash="h1"),
+        Symbol(
+            file_id=fa.id,
+            name="caller",
+            kind="function",
+            start_line=1,
+            end_line=5,
+            content_hash="h1",
+        ),
     )
     sym_callee = insert_symbol(
         conn,
-        Symbol(file_id=fa.id, name="callee", kind="function", start_line=7, end_line=9, content_hash="h2"),
+        Symbol(
+            file_id=fa.id,
+            name="callee",
+            kind="function",
+            start_line=7,
+            end_line=9,
+            content_hash="h2",
+        ),
     )
 
     e = CallEdge(caller_symbol_id=sym_caller.id, callee_name="callee", line=3)
@@ -86,7 +125,7 @@ class TestResolveCallEdges:
     def test_resolve_intra_file(self):
         conn = get_connection(":memory:")
         run_migrations(conn)
-        project, caller, callee = _seed_same_file(conn)
+        project, _caller, callee = _seed_same_file(conn)
 
         resolved = resolve_call_edges(conn, project.id)
 
@@ -105,7 +144,7 @@ class TestResolveCallEdges:
 
         assert resolved == 1  # greet resolves, console.log stays NULL
         row = conn.execute(
-            "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'"
+            "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'",
         ).fetchone()
         assert row["callee_symbol_id"] == greet.id
 
@@ -119,7 +158,7 @@ class TestResolveCallEdges:
         resolve_call_edges(conn, project.id)
 
         row = conn.execute(
-            "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'console.log'"
+            "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'console.log'",
         ).fetchone()
         assert row["callee_symbol_id"] is None
 
@@ -133,27 +172,62 @@ class TestResolveCallEdges:
             Project(
                 root_path="/test/p",
                 name="p",
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             ),
         )
         fa = insert_file(
-            conn, File(project_id=project.id, path="a.ts", language="typescript", content_hash="ha")
+            conn,
+            File(
+                project_id=project.id,
+                path="a.ts",
+                language="typescript",
+                content_hash="ha",
+            ),
         )
         fb = insert_file(
-            conn, File(project_id=project.id, path="b.ts", language="typescript", content_hash="hb")
+            conn,
+            File(
+                project_id=project.id,
+                path="b.ts",
+                language="typescript",
+                content_hash="hb",
+            ),
         )
 
         caller = insert_symbol(
             conn,
-            Symbol(file_id=fa.id, name="main", kind="function", start_line=1, end_line=1, content_hash="h1"),
+            Symbol(
+                file_id=fa.id,
+                name="main",
+                kind="function",
+                start_line=1,
+                end_line=1,
+                content_hash="h1",
+            ),
         )
-        private_util = insert_symbol(
+        insert_symbol(
             conn,
-            Symbol(file_id=fa.id, name="util", kind="function", exported=False, start_line=1, end_line=1, content_hash="h2"),
+            Symbol(
+                file_id=fa.id,
+                name="util",
+                kind="function",
+                exported=False,
+                start_line=1,
+                end_line=1,
+                content_hash="h2",
+            ),
         )
         exported_util = insert_symbol(
             conn,
-            Symbol(file_id=fb.id, name="util", kind="function", exported=True, start_line=1, end_line=1, content_hash="h3"),
+            Symbol(
+                file_id=fb.id,
+                name="util",
+                kind="function",
+                exported=True,
+                start_line=1,
+                end_line=1,
+                content_hash="h3",
+            ),
         )
 
         e = CallEdge(caller_symbol_id=caller.id, callee_name="util", line=1)
@@ -176,27 +250,62 @@ class TestResolveCallEdges:
             Project(
                 root_path="/test/p",
                 name="p",
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             ),
         )
         fa = insert_file(
-            conn, File(project_id=project.id, path="a.ts", language="typescript", content_hash="ha")
+            conn,
+            File(
+                project_id=project.id,
+                path="a.ts",
+                language="typescript",
+                content_hash="ha",
+            ),
         )
         fb = insert_file(
-            conn, File(project_id=project.id, path="b.ts", language="typescript", content_hash="hb")
+            conn,
+            File(
+                project_id=project.id,
+                path="b.ts",
+                language="typescript",
+                content_hash="hb",
+            ),
         )
 
         caller = insert_symbol(
             conn,
-            Symbol(file_id=fa.id, name="main", kind="function", start_line=1, end_line=1, content_hash="h1"),
+            Symbol(
+                file_id=fa.id,
+                name="main",
+                kind="function",
+                start_line=1,
+                end_line=1,
+                content_hash="h1",
+            ),
         )
         same_file_util = insert_symbol(
             conn,
-            Symbol(file_id=fa.id, name="util", kind="function", exported=False, start_line=1, end_line=1, content_hash="h2"),
+            Symbol(
+                file_id=fa.id,
+                name="util",
+                kind="function",
+                exported=False,
+                start_line=1,
+                end_line=1,
+                content_hash="h2",
+            ),
         )
-        other_util = insert_symbol(
+        insert_symbol(
             conn,
-            Symbol(file_id=fb.id, name="util", kind="function", exported=False, start_line=1, end_line=1, content_hash="h3"),
+            Symbol(
+                file_id=fb.id,
+                name="util",
+                kind="function",
+                exported=False,
+                start_line=1,
+                end_line=1,
+                content_hash="h3",
+            ),
         )
 
         e = CallEdge(caller_symbol_id=caller.id, callee_name="util", line=1)
@@ -219,24 +328,49 @@ class TestResolveCallEdges:
             Project(
                 root_path="/test/go",
                 name="go",
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             ),
         )
         fmain = insert_file(
-            conn, File(project_id=project.id, path="src/main.go", language="go", content_hash="hm")
+            conn,
+            File(
+                project_id=project.id,
+                path="src/main.go",
+                language="go",
+                content_hash="hm",
+            ),
         )
         futils = insert_file(
-            conn, File(project_id=project.id, path="src/utils.go", language="go", content_hash="hu")
+            conn,
+            File(
+                project_id=project.id,
+                path="src/utils.go",
+                language="go",
+                content_hash="hu",
+            ),
         )
 
         sym_main = insert_symbol(
             conn,
-            Symbol(file_id=fmain.id, name="main", kind="function", start_line=1, end_line=3, content_hash="h1"),
+            Symbol(
+                file_id=fmain.id,
+                name="main",
+                kind="function",
+                start_line=1,
+                end_line=3,
+                content_hash="h1",
+            ),
         )
         sym_greet = insert_symbol(
             conn,
             Symbol(
-                file_id=futils.id, name="greet", kind="function", exported=False, start_line=1, end_line=3, content_hash="h2",
+                file_id=futils.id,
+                name="greet",
+                kind="function",
+                exported=False,
+                start_line=1,
+                end_line=3,
+                content_hash="h2",
             ),
         )
 
@@ -260,23 +394,48 @@ class TestResolveCallEdges:
             Project(
                 root_path="/test/p",
                 name="p",
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             ),
         )
         fa = insert_file(
-            conn, File(project_id=project.id, path="a.ts", language="typescript", content_hash="ha")
+            conn,
+            File(
+                project_id=project.id,
+                path="a.ts",
+                language="typescript",
+                content_hash="ha",
+            ),
         )
 
         caller = insert_symbol(
             conn,
-            Symbol(file_id=fa.id, name="caller", kind="function", start_line=1, end_line=1, content_hash="h1"),
+            Symbol(
+                file_id=fa.id,
+                name="caller",
+                kind="function",
+                start_line=1,
+                end_line=1,
+                content_hash="h1",
+            ),
         )
         callee = insert_symbol(
             conn,
-            Symbol(file_id=fa.id, name="util", kind="function", start_line=1, end_line=1, content_hash="h2"),
+            Symbol(
+                file_id=fa.id,
+                name="util",
+                kind="function",
+                start_line=1,
+                end_line=1,
+                content_hash="h2",
+            ),
         )
 
-        e = CallEdge(caller_symbol_id=caller.id, callee_name="util", callee_symbol_id=callee.id, line=1)
+        e = CallEdge(
+            caller_symbol_id=caller.id,
+            callee_name="util",
+            callee_symbol_id=callee.id,
+            line=1,
+        )
         insert_call_edge(conn, e)
         conn.commit()
 

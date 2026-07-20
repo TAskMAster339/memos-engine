@@ -1,13 +1,13 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+import pytest
 
 from memos.core.db import (
-    get_connection,
     insert_call_edge,
     insert_file,
     insert_import,
     insert_project,
     insert_symbol,
-    run_migrations,
 )
 from memos.core.models import CallEdge, File, Import, Project, Symbol
 from memos.query.core import find_calls, find_symbol, get_module
@@ -17,7 +17,7 @@ def _seed(conn):
     project = Project(
         root_path="/test/proj",
         name="proj",
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     project = insert_project(conn, project)
 
@@ -152,27 +152,49 @@ class TestFindSymbol:
         project = Project(
             root_path="/test/p",
             name="p",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         project = insert_project(conn, project)
 
         f1 = insert_file(
-            conn, File(project_id=project.id, path="x.ts", language="typescript", content_hash="h1")
+            conn,
+            File(
+                project_id=project.id,
+                path="x.ts",
+                language="typescript",
+                content_hash="h1",
+            ),
         )
         f2 = insert_file(
-            conn, File(project_id=project.id, path="y.ts", language="typescript", content_hash="h2")
+            conn,
+            File(
+                project_id=project.id,
+                path="y.ts",
+                language="typescript",
+                content_hash="h2",
+            ),
         )
 
         insert_symbol(
             conn,
             Symbol(
-                file_id=f1.id, name="foo", kind="function", start_line=1, end_line=1, content_hash="h3"
+                file_id=f1.id,
+                name="foo",
+                kind="function",
+                start_line=1,
+                end_line=1,
+                content_hash="h3",
             ),
         )
         insert_symbol(
             conn,
             Symbol(
-                file_id=f2.id, name="foo", kind="function", start_line=1, end_line=1, content_hash="h4"
+                file_id=f2.id,
+                name="foo",
+                kind="function",
+                start_line=1,
+                end_line=1,
+                content_hash="h4",
             ),
         )
         conn.commit()
@@ -215,7 +237,6 @@ class TestFindCalls:
 
     def test_invalid_direction(self, conn):
         _seed(conn)
-        import pytest
         with pytest.raises(ValueError, match="invalid direction"):
             find_calls(conn, "main", direction="invalid")
 

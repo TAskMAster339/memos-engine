@@ -8,6 +8,9 @@
 | `uv run pytest -v` | verbose |
 | `uv run pytest tests/test_crud.py::test_symbol_crud` | single test |
 | `uv run memos index --path . --full` | index project at path |
+| `uv run memos query symbol <name> [--kind KIND]` | find symbols by name |
+| `uv run memos query calls <name> [--direction callers\|callees]` | find callers/callees |
+| `uv run memos query module <path>` | show everything for a file |
 | `uv add <pkg>` | add dependency |
 | `uv add --dev <pkg>` | add dev dependency |
 | `uv sync` | reinstall after pyproject.toml changes |
@@ -17,7 +20,7 @@
 ```
 memos/
   core/
-    db.py           # get_connection(WAL+FK), run_migrations, CRUD (all return pydantic models)
+    db.py           # get_connection(WAL+FK), run_migrations, CRUD (all return pydantic models), resolve_call_edges
     models.py       # Project, File, Symbol, CallEdge, Import, MemoryEntry
     schema.sql      # human-readable DDL copy
     migrations/
@@ -27,6 +30,8 @@ memos/
     typescript.py   # TypeScriptIndexer (tree-sitter, handles .ts + .tsx)
     go.py           # GoIndexer (tree-sitter, export by name case)
     diff.py         # compute_file_hash, should_reindex
+  query/
+    core.py         # find_symbol, find_calls, get_module — pure query layer over db
   cli/
     main.py         # argparse: "memos index [--path .] [--full]"
 tests/
@@ -37,6 +42,9 @@ tests/
   test_typescript_indexer.py  # 18 unit tests on TS parsing
   test_go_indexer.py          # 18 unit tests on Go parsing
   test_cli_index.py           # 8 integration tests: index flow (TS + Go)
+  test_resolver.py            # 7 unit tests on call-edge resolution
+  test_query.py               # 12 unit tests on query/core.py
+  test_cli_query.py           # 7 integration tests: query flow (TS + Go)
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
     go_mini/src/            # 3 .go files for integration testing
@@ -54,9 +62,11 @@ tests/
 
 - `indexer/typescript.py` produces plain dataclasses (`ParseResult`), not pydantic models — conversion happens in CLI when calling CRUD
 - `cli/main.py` is a thin argparse wrapper over `indexer/` + `core/db.py`; no business logic in CLI
+- `query/core.py` has no knowledge of CLI, API, or MCP — all three are thin adapters over it
 - `index_file()` in cli/main.py is the unit of change: delete old → parse → insert new
 - `memos index` stores DB at `{project_root}/.memos/memory.db`
 - call_edges are inserted with `callee_symbol_id=NULL` (first pass); resolution is Task 5
+- `callee_symbol_id` and `resolved_file_id` use `ON DELETE SET NULL` — when a callee symbol is deleted (e.g. during reindex), the FK is automatically nulled, then re-resolved in the second pass
 - `export` keyword detection (TS): `export_statement` wraps declarations; the walker passes `exported=True` to children
 - Go export: determined by `name[0].isupper()` — no `export_statement`
 - Go methods: `method_declaration` nodes are separate from type declarations; receiver type is extracted from `receiver` field
@@ -64,8 +74,6 @@ tests/
 
 ## What does not exist yet
 
-- `query/core.py` (find_symbol, find_calls, get_module) — Iteration 1, Task 4
-- Call-edge second-pass resolution — Task 5
 - FastAPI service — Iteration 2
 - Semantic search (sqlite-vec + sentence-transformers) — Task 7
 - MCP server — Iteration 3
@@ -77,8 +85,8 @@ tests/
 1. ✅ `core/db.py` + `models.py` + `schema.sql` + migrations + tests
 2. ✅ `indexer/base.py` + `indexer/typescript.py` + CLI `index`
 3. ✅ `indexer/go.py`
-4. `query/core.py` (find_symbol, find_calls, get_module) + CLI `query`
-5. Call-edge resolution (second pass) + cross-file tests
+4. ✅ `query/core.py` (find_symbol, find_calls, get_module) + CLI `query`
+5. ✅ Call-edge resolution (second pass) + cross-file tests
 6. FastAPI wrapper
 7. Semantic search (sqlite-vec + sentence-transformers)
 8. MCP server

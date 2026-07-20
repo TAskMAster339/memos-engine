@@ -143,6 +143,31 @@ def test_index_ts_project():
     conn.close()
 
 
+def test_index_ts_project_resolves_calls():
+    conn = get_connection(":memory:")
+    run_migrations(conn)
+
+    project = get_or_create_project(conn, str(TS_FIXTURE))
+    for full, rel in find_files(str(TS_FIXTURE)):
+        ext = os.path.splitext(full)[1]
+        if ext == ".ts":
+            indexer = EXTENSION_INDEXERS.get(ext)
+            index_file(conn, project, full, rel, indexer, full=True)
+
+    from memos.core.db import resolve_call_edges
+    resolved = resolve_call_edges(conn, project.id)
+
+    assert resolved >= 1
+
+    row = conn.execute(
+        "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'"
+    ).fetchone()
+    assert row is not None
+    assert row["callee_symbol_id"] is not None
+
+    conn.close()
+
+
 def test_index_go_project():
     conn = get_connection(":memory:")
     run_migrations(conn)
@@ -163,5 +188,30 @@ def test_index_go_project():
 
     import_count = conn.execute("SELECT COUNT(*) FROM imports").fetchone()[0]
     assert import_count == 3
+
+    conn.close()
+
+
+def test_index_go_project_resolves_calls():
+    conn = get_connection(":memory:")
+    run_migrations(conn)
+
+    project = get_or_create_project(conn, str(GO_FIXTURE))
+    for full, rel in find_files(str(GO_FIXTURE)):
+        ext = os.path.splitext(full)[1]
+        if ext == ".go":
+            indexer = EXTENSION_INDEXERS.get(ext)
+            index_file(conn, project, full, rel, indexer, full=True)
+
+    from memos.core.db import resolve_call_edges
+    resolved = resolve_call_edges(conn, project.id)
+
+    assert resolved >= 2
+
+    row = conn.execute(
+        "SELECT callee_symbol_id FROM call_edges WHERE callee_name = 'greet'"
+    ).fetchone()
+    assert row is not None
+    assert row["callee_symbol_id"] is not None
 
     conn.close()

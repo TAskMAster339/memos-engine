@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -15,11 +16,13 @@ from memos.core.db import (
     delete_file,
     get_file_by_path,
     get_project,
+    resolve_call_edges,
 )
 from memos.core.models import Project, File, Symbol, CallEdge, Import
 from memos.indexer.diff import compute_file_hash, should_reindex
 from memos.indexer.go import GoIndexer
 from memos.indexer.typescript import TypeScriptIndexer
+from memos.query.core import find_calls, find_symbol, get_module
 
 EXTENSION_INDEXERS = {
     ".ts": TypeScriptIndexer(tsx=False),
@@ -165,12 +168,55 @@ def cmd_index(args):
         )
 
     conn.commit()
+
+    total = conn.execute(
+        "SELECT COUNT(*) FROM call_edges ce "
+        "JOIN symbols s ON s.id = ce.caller_symbol_id "
+        "JOIN files f ON f.id = s.file_id "
+        "WHERE f.project_id = ?", (project.id,)
+    ).fetchone()[0]
+    resolved = resolve_call_edges(conn, project.id)
+    conn.commit()
     conn.close()
     print(f"Indexed {indexed} of {len(files)} files")
+    if total:
+        print(f"Resolved {resolved} of {total} call edges")
 
 
-def cmd_query(args):
-    print("query not yet implemented (task 4)")
+def _open_db(args):
+    root = os.path.abspath(args.path)
+    db_path = str(Path(root) / ".memos" / "memory.db")
+    if not os.path.exists(db_path):
+        print("error: no .memos/memory.db found — run 'memos index' first", file=sys.stderr)
+        sys.exit(1)
+    conn = get_connection(db_path)
+    run_migrations(conn)
+    project = get_project_by_root(conn, root)
+    if project is None:
+        print(f"error: no project found for {root}", file=sys.stderr)
+        sys.exit(1)
+    return conn, project
+
+
+def cmd_query_symbol(args):
+    conn, project = _open_db(args)
+    results = find_symbol(conn, args.name, kind=args.kind)
+    print(json.dumps(results, indent=2, default=str))
+    conn.close()
+
+
+def cmd_query_calls(args):
+    conn, project = _open_db(args)
+    results = find_calls(conn, args.name, direction=args.direction)
+    print(json.dumps(results, indent=2, default=str))
+    conn.close()
+
+
+def cmd_query_module(args):
+    conn, project = _open_db(args)
+    results = get_module(conn, args.module_path, project.id)
+    print(json.dumps(results, indent=2, default=str))
+    conn.close()
 
 
 def main():
@@ -183,7 +229,25 @@ def main():
     p_index.set_defaults(func=cmd_index)
 
     p_query = sub.add_parser("query", help="Query indexed data")
-    p_query.set_defaults(func=cmd_query)
+    qsub = p_query.add_subparsers(dest="query_command", required=True)
+
+    p_sym = qsub.add_parser("symbol", help="Find symbols by name")
+    p_sym.add_argument("name", help="Symbol name to search")
+    p_sym.add_argument("--kind", help="Filter by symbol kind (function, class, const, etc.)")
+    p_sym.add_argument("--path", default=".", help="Project root path")
+    p_sym.set_defaults(func=cmd_query_symbol)
+
+    p_calls = qsub.add_parser("calls", help="Find callers or callees of a symbol")
+    p_calls.add_argument("name", help="Symbol name")
+    p_calls.add_argument("--direction", default="callers", choices=["callers", "callees"],
+                         help="Direction: callers (who calls this) or callees (what this calls)")
+    p_calls.add_argument("--path", default=".", help="Project root path")
+    p_calls.set_defaults(func=cmd_query_calls)
+
+    p_mod = qsub.add_parser("module", help="Show everything for a file (symbols, calls, imports)")
+    p_mod.add_argument("module_path", metavar="path", help="Relative file path")
+    p_mod.add_argument("--path", default=".", help="Project root path")
+    p_mod.set_defaults(func=cmd_query_module)
 
     args = parser.parse_args()
     args.func(args)

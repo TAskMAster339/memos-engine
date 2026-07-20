@@ -140,6 +140,48 @@ def get_calls_for_callee(conn: sqlite3.Connection, callee_symbol_id: int) -> lis
     return [CallEdge.model_validate(dict(r)) for r in rows]
 
 
+# ── CallEdge resolution ──────────────────────────────────────────────────────
+
+def resolve_call_edges(conn: sqlite3.Connection, project_id: int) -> int:
+    conn.execute(
+        """UPDATE call_edges SET callee_symbol_id = NULL
+           WHERE callee_symbol_id IS NOT NULL
+           AND callee_symbol_id NOT IN (SELECT id FROM symbols)"""
+    )
+
+    edges = conn.execute(
+        """SELECT ce.id, ce.callee_name, caller.file_id AS caller_file_id
+           FROM call_edges ce
+           JOIN symbols caller ON caller.id = ce.caller_symbol_id
+           JOIN files f ON f.id = caller.file_id
+           WHERE ce.callee_symbol_id IS NULL
+           AND f.project_id = ?""",
+        (project_id,),
+    ).fetchall()
+
+    resolved = 0
+    for edge in edges:
+        matches = conn.execute(
+            """SELECT s.id, s.file_id, s.exported
+               FROM symbols s
+               JOIN files f ON f.id = s.file_id
+               WHERE s.name = ? AND f.project_id = ?
+               ORDER BY s.exported DESC,
+                        CASE WHEN s.file_id = ? THEN 0 ELSE 1 END,
+                        s.id""",
+            (edge["callee_name"], project_id, edge["caller_file_id"]),
+        ).fetchall()
+
+        if matches:
+            conn.execute(
+                "UPDATE call_edges SET callee_symbol_id = ? WHERE id = ?",
+                (matches[0]["id"], edge["id"]),
+            )
+            resolved += 1
+
+    return resolved
+
+
 # ── Import ───────────────────────────────────────────────────────────────────
 
 def insert_import(conn: sqlite3.Connection, imp: Import) -> Import:

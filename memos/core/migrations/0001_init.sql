@@ -37,7 +37,7 @@ CREATE TABLE call_edges (
   id INTEGER PRIMARY KEY,
   caller_symbol_id INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
   callee_name TEXT NOT NULL,
-  callee_symbol_id INTEGER REFERENCES symbols(id),
+  callee_symbol_id INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
   line INTEGER NOT NULL
 );
 CREATE INDEX idx_calls_callee_name ON call_edges(callee_name);
@@ -47,7 +47,7 @@ CREATE TABLE imports (
   id INTEGER PRIMARY KEY,
   file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
   imported_path TEXT NOT NULL,
-  resolved_file_id INTEGER REFERENCES files(id)
+  resolved_file_id INTEGER REFERENCES files(id) ON DELETE SET NULL
 );
 
 CREATE TABLE memory_entries (

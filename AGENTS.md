@@ -25,6 +25,7 @@ memos/
   indexer/
     base.py         # LanguageIndexer ABC + ParsedSymbol/Call/Import/Result dataclasses
     typescript.py   # TypeScriptIndexer (tree-sitter, handles .ts + .tsx)
+    go.py           # GoIndexer (tree-sitter, export by name case)
     diff.py         # compute_file_hash, should_reindex
   cli/
     main.py         # argparse: "memos index [--path .] [--full]"
@@ -34,15 +35,17 @@ tests/
   test_crud.py      # CRUD + cascade delete
   test_migrations.py# idempotent re-run
   test_typescript_indexer.py  # 18 unit tests on TS parsing
-  test_cli_index.py           # 4 integration tests: index flow
+  test_go_indexer.py          # 18 unit tests on Go parsing
+  test_cli_index.py           # 8 integration tests: index flow (TS + Go)
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
+    go_mini/src/            # 3 .go files for integration testing
 ```
 
 ## Dependencies
 
 - **pydantic** — all CRUD returns models, not raw rows
-- **tree-sitter + tree-sitter-typescript** — AST parsing (.ts, .tsx)
+- **tree-sitter + tree-sitter-typescript + tree-sitter-go** — AST parsing (.ts, .tsx, .go)
 - **stdlib sqlite3** — connection mgmt, WAL journal, FK enforcement
 - **pytest** (dev)
 - **hatchling** (build)
@@ -54,11 +57,13 @@ tests/
 - `index_file()` in cli/main.py is the unit of change: delete old → parse → insert new
 - `memos index` stores DB at `{project_root}/.memos/memory.db`
 - call_edges are inserted with `callee_symbol_id=NULL` (first pass); resolution is Task 5
-- `export` keyword detection: `export_statement` wraps declarations; the walker passes `exported=True` to children
+- `export` keyword detection (TS): `export_statement` wraps declarations; the walker passes `exported=True` to children
+- Go export: determined by `name[0].isupper()` — no `export_statement`
+- Go methods: `method_declaration` nodes are separate from type declarations; receiver type is extracted from `receiver` field
+- Go imports: both single `import "x"` and grouped `import ( "x" "y" )` forms are handled via `import_spec` / `import_spec_list`
 
 ## What does not exist yet
 
-- `indexer/go.py` — Iteration 1, Task 3
 - `query/core.py` (find_symbol, find_calls, get_module) — Iteration 1, Task 4
 - Call-edge second-pass resolution — Task 5
 - FastAPI service — Iteration 2
@@ -71,7 +76,7 @@ tests/
 
 1. ✅ `core/db.py` + `models.py` + `schema.sql` + migrations + tests
 2. ✅ `indexer/base.py` + `indexer/typescript.py` + CLI `index`
-3. `indexer/go.py`
+3. ✅ `indexer/go.py`
 4. `query/core.py` (find_symbol, find_calls, get_module) + CLI `query`
 5. Call-edge resolution (second pass) + cross-file tests
 6. FastAPI wrapper

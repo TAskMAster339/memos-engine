@@ -18,11 +18,13 @@ from memos.core.db import (
 )
 from memos.core.models import Project, File, Symbol, CallEdge, Import
 from memos.indexer.diff import compute_file_hash, should_reindex
+from memos.indexer.go import GoIndexer
 from memos.indexer.typescript import TypeScriptIndexer
 
 EXTENSION_INDEXERS = {
     ".ts": TypeScriptIndexer(tsx=False),
     ".tsx": TypeScriptIndexer(tsx=True),
+    ".go": GoIndexer(),
 }
 
 SKIP_DIRS = {".git", ".memos", "node_modules", "__pycache__", ".venv", "target"}

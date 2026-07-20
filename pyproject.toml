@@ -6,9 +6,21 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-typescript>=0.23.2",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+memos = "memos.cli.main:main"

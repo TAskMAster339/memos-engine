@@ -182,6 +182,43 @@ def semantic_search(
     return out
 
 
+def list_files(
+    conn,
+    project_id: int,
+    path_filter: str | None = None,
+) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM files WHERE project_id = ?"
+    params: list[Any] = [project_id]
+    if path_filter is not None:
+        sql += " AND path LIKE ?"
+        params.append(f"%{path_filter}%")
+    sql += " ORDER BY path"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def list_symbols(
+    conn,
+    project_id: int,
+    file_path: str | None = None,
+    kind: str | None = None,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT s.*, f.path AS file_path, f.language AS file_language
+        FROM symbols s
+        JOIN files f ON f.id = s.file_id
+        WHERE f.project_id = ?
+    """
+    params: list[Any] = [project_id]
+    if file_path is not None:
+        sql += " AND f.path = ?"
+        params.append(file_path)
+    if kind is not None:
+        sql += " AND s.kind = ?"
+        params.append(kind)
+    sql += " ORDER BY f.path, s.start_line"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
 def get_module(conn, file_path: str, project_id: int) -> dict[str, Any]:
     file_row = conn.execute(
         "SELECT * FROM files WHERE project_id = ? AND path = ?",

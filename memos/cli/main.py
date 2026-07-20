@@ -289,6 +289,13 @@ def cmd_serve(args):
     uvicorn.run("memos.api.main:app", host=args.host, port=args.port)
 
 
+def cmd_serve_mcp(args):
+    os.environ["MEMOS_PROJECT_PATH"] = str(Path(args.path).resolve())
+    from memos.mcp.server import mcp  # noqa: PLC0415
+
+    mcp.run(transport="stdio")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="memos")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -339,6 +346,13 @@ def main():
     p_serve.add_argument("--host", default="0.0.0.0", help="Bind host")
     p_serve.add_argument("--port", type=int, default=8000, help="Bind port")
     p_serve.set_defaults(func=cmd_serve)
+
+    p_serve_mcp = sub.add_parser(
+        "serve-mcp",
+        help="Start the MCP server (stdio transport)",
+    )
+    p_serve_mcp.add_argument("--path", default=".", help="Project root path")
+    p_serve_mcp.set_defaults(func=cmd_serve_mcp)
 
     args = parser.parse_args()
     args.func(args)

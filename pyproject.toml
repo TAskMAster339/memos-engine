@@ -14,6 +14,7 @@ dependencies = [
     "fastembed>=0.3.0",
     "sqlite-vec>=0.1.0",
     "rich>=15.0.0",
+    "mcp[cli]>=1.28.1",
 ]
 
 [dependency-groups]
@@ -21,6 +22,7 @@ dev = [
     "httpx>=0.28.1",
     "httpx2>=2.7.0",
     "pytest>=9.1.1",
+    "pytest-anyio>=0.0.0",
     "ruff>=0.9.0",
 ]
 
@@ -41,6 +43,8 @@ line-length = 88
 "tests/*.py" = ["PLR2004", "N802", "RUF015"]
 
 [tool.ruff.lint]
+
+ignore = ["COM812"]
 
 select = [
     "A",    # flake8-builtins

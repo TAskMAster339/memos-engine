@@ -60,6 +60,51 @@ Endpoints:
 
 All endpoints return JSON. Set `MEMOS_PROJECT_PATH` (defaults to `.`).
 
+## Semantic Search
+
+```bash
+# Via HTTP API
+curl -X POST http://localhost:8000/search/semantic \
+  -H "Content-Type: application/json" \
+  -d '{"query": "user authentication", "top_k": 5}'
+```
+
+Uses `all-MiniLM-L6-v2` embeddings via fastembed (ONNX, no GPU required).
+
+## MCP Server
+
+Start the Memory OS MCP server for AI agents:
+
+```bash
+uv run memos serve-mcp --path /project
+```
+
+Available tools:
+
+| Tool | Description |
+|------|-------------|
+| `find_symbol_tool` | Search symbols by name (+ kind, file filter) |
+| `find_calls_tool` | Find callers or callees of a symbol |
+| `get_module_tool` | Full file info (symbols, calls, imports) |
+| `semantic_search_tool` | Natural language search over code |
+| `list_files_tool` | List all indexed files |
+| `list_symbols_tool` | List all indexed symbols |
+| `list_projects_tool` | Current project info with stats |
+
+Configure in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memory-os": {
+      "command": "uv",
+      "args": ["run", "memos", "serve-mcp", "--path", "/ABSOLUTE/PATH/TO/PROJECT"],
+      "env": {}
+    }
+  }
+}
+```
+
 ## Test
 
 ```bash
@@ -76,3 +121,7 @@ uv run pytest -v
   pass; second-pass resolution is a separate task.
 - The CLI (`memos index`) is a thin adapter over `indexer/` + `core/db.py` —
   no business logic.
+- Semantic search: sqlite-vec vec0 table, lazy-loaded fastembed model, cascade
+  cleanup on reindex (`--no-embed` flag to skip).
+- MCP server (`memos serve-mcp`) is a thin FastMCP adapter over `query/core.py`
+  — same pattern as the FastAPI adapter.

@@ -11,6 +11,9 @@
 | `uv run memos query symbol <name> [--kind KIND]` | find symbols by name |
 | `uv run memos query calls <name> [--direction callers\|callees]` | find callers/callees |
 | `uv run memos query module <path>` | show everything for a file |
+| `uv run memos serve --path . --port 8000` | start FastAPI server |
+| `uv run memos serve-mcp --path .` | start MCP server (stdio) |
+| `uv run pytest tests/test_mcp.py` | MCP server tests |
 | `uv add <pkg>` | add dependency |
 | `uv add --dev <pkg>` | add dev dependency |
 | `uv sync` | reinstall after pyproject.toml changes |
@@ -31,11 +34,22 @@ memos/
     go.py           # GoIndexer (tree-sitter, export by name case)
     diff.py         # compute_file_hash, should_reindex
   query/
-    core.py         # find_symbol, find_calls, get_module, find_calls_by_id — pure query layer over db
+    core.py         # find_symbol, find_calls, get_module, find_calls_by_id, semantic_search,
+                    # list_files, list_symbols — pure query layer over db
   api/
     main.py         # FastAPI app — thin adapter over query/core.py
+    schemas.py      # pydantic response models for API
+  mcp/
+    server.py       # MCP server (FastMCP, stdio) — thin adapter over query/core.py
+  search/
+    base.py         # EmbeddingModel + VectorStore ABCs
+    embeddings.py   # FastEmbedEmbedding (all-MiniLM-L6-v2, 384-dim)
+    sqlite_vec_store.py  # SqliteVecStore (sqlite-vec vec0 table)
   cli/
-    main.py         # argparse: "memos index [--path .] [--full]"
+    main.py         # argparse: "memos index [--path .] [--full] [--no-embed]"
+                    #          "memos query (symbol|calls|module)"
+                    #          "memos serve [--path] [--port]"
+                    #          "memos serve-mcp [--path]"
 tests/
   conftest.py       # fixture: in-memory sqlite with migrations applied
   test_schema.py    # table existence checks
@@ -48,6 +62,9 @@ tests/
   test_query.py               # 12 unit tests on query/core.py
   test_cli_query.py           # 7 integration tests: query flow (TS + Go)
   test_api.py                 # 7 integration tests: FastAPI endpoints
+  test_mcp.py                 # 15 tests: MCP server tools
+  test_semantic_search.py     # 8 tests: VecStore CRUD + semantic_search query
+  test_migrations.py          # 2 tests: idempotent re-run
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
     go_mini/src/            # 3 .go files for integration testing
@@ -58,9 +75,14 @@ tests/
 - **pydantic** — all CRUD returns models, not raw rows
 - **tree-sitter + tree-sitter-typescript + tree-sitter-go** — AST parsing (.ts, .tsx, .go)
 - **stdlib sqlite3** — connection mgmt, WAL journal, FK enforcement
-- **fastapi + uvicorn** — HTTP API (Iteration 2, Task 6)
+- **fastapi + uvicorn** — HTTP API
+- **mcp[cli]** — MCP server (FastMCP, stdio transport)
+- **fastembed** — ONNX embeddings (all-MiniLM-L6-v2, 384-dim)
+- **sqlite-vec** — vector search extension for sqlite
+- **rich** — CLI progress bars
 - **pytest** (dev)
 - **httpx** (dev, for TestClient)
+- **pytest-anyio** (dev, for async MCP tests)
 - **hatchling** (build)
 
 ## Architecture conventions
@@ -68,6 +90,8 @@ tests/
 - `indexer/typescript.py` produces plain dataclasses (`ParseResult`), not pydantic models — conversion happens in CLI when calling CRUD
 - `cli/main.py` is a thin argparse wrapper over `indexer/` + `core/db.py`; no business logic in CLI
 - `query/core.py` has no knowledge of CLI, API, or MCP — all three are thin adapters over it
+- `mcp/server.py` is a thin FastMCP wrapper over `query/core.py`; same pattern as `api/main.py`
+- All MCP tools return JSON strings (parsable by the LLM), never raw text
 - `index_file()` in cli/main.py is the unit of change: delete old → parse → insert new
 - `memos index` stores DB at `{project_root}/.memos/memory.db`
 - call_edges are inserted with `callee_symbol_id=NULL` (first pass); resolution is Task 5
@@ -79,8 +103,6 @@ tests/
 
 ## What does not exist yet
 
-- Semantic search (sqlite-vec + sentence-transformers) — Task 7
-- MCP server — Iteration 3
 - LLM summary generation — Iteration 4
 - CI, linting, type checking, codegen — none configured
 
@@ -92,7 +114,7 @@ tests/
 4. ✅ `query/core.py` (find_symbol, find_calls, get_module) + CLI `query`
 5. ✅ Call-edge resolution (second pass) + cross-file tests
 6. ✅ FastAPI wrapper
-7. Semantic search (sqlite-vec + sentence-transformers)
-8. MCP server
+7. ✅ Semantic search (sqlite-vec + sentence-transformers)
+8. ✅ MCP server
 9. `memory_entries` write-path via `memory_add_note`
 10. LLM enrichment: `get_or_generate_summary()` with content_hash check

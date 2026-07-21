@@ -20,6 +20,15 @@ class RenameImpactResponse(BaseModel):
     warning: str
 
 
+class DependencyGraphResponse(BaseModel):
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+
+
+class ImportCyclesResponse(BaseModel):
+    cycles: list[list[str]]
+
+
 class UnusedSymbolsResponse(BaseModel):
     symbols: list[dict[str, Any]]
 

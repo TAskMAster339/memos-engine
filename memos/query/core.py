@@ -538,6 +538,82 @@ def find_unused_symbols(
     return [dict(r) for r in rows]
 
 
+def get_dependency_graph(
+    conn,
+    project_id: int,
+) -> dict[str, Any]:
+    files = conn.execute(
+        "SELECT id, path FROM files WHERE project_id = ? ORDER BY path",
+        (project_id,),
+    ).fetchall()
+    nodes = [{"id": r["id"], "path": r["path"]} for r in files]
+
+    edge_rows = conn.execute(
+        "SELECT i.file_id AS from_id, i.resolved_file_id AS to_id "
+        "FROM imports i "
+        "JOIN files f ON f.id = i.file_id "
+        "WHERE f.project_id = ? AND i.resolved_file_id IS NOT NULL",
+        (project_id,),
+    ).fetchall()
+    edges = [{"from": r["from_id"], "to": r["to_id"]} for r in edge_rows]
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def _extract_cycle(
+    u: int,
+    v: int,
+    parent: dict[int, int | None],
+    node_map: dict[int, str],
+) -> list[str]:
+    path: list[str] = []
+    cur: int | None = u
+    while cur is not None:
+        path.append(node_map[cur])
+        if cur == v:
+            break
+        cur = parent.get(cur)
+    path.reverse()
+    return path
+
+
+def find_import_cycles(
+    conn,
+    project_id: int,
+) -> list[list[str]]:
+    graph = get_dependency_graph(conn, project_id)
+    adj: dict[int, list[int]] = {}
+    for e in graph["edges"]:
+        adj.setdefault(e["from"], []).append(e["to"])
+
+    node_map = {n["id"]: n["path"] for n in graph["nodes"]}
+
+    visited: set[int] = set()
+    rec_stack: set[int] = set()
+    parent: dict[int, int | None] = {}
+    cycles: list[list[str]] = []
+
+    def dfs(u: int) -> None:
+        visited.add(u)
+        rec_stack.add(u)
+        for v in adj.get(u, []):
+            if v not in visited:
+                parent[v] = u
+                dfs(v)
+            elif v in rec_stack:
+                cycles.append(
+                    _extract_cycle(u, v, parent, node_map),
+                )
+        rec_stack.discard(u)
+
+    for nid in list(node_map.keys()):
+        if nid not in visited:
+            parent[nid] = None
+            dfs(nid)
+
+    return cycles
+
+
 def find_dead_imports(
     conn,
     project_id: int,

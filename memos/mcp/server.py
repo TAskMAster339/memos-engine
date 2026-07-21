@@ -9,9 +9,11 @@ from memos.query.core import (
     add_memory_entry,
     find_calls,
     find_dead_imports,
+    find_import_cycles,
     find_symbol,
     find_unused_symbols,
     get_context,
+    get_dependency_graph,
     get_diff_impact,
     get_memory_entries,
     get_module,
@@ -300,6 +302,52 @@ def diff_impact_tool(
         if "error" in result:
             return json.dumps(result)
         return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def get_dependency_graph_tool(
+    project: str | None = None,
+) -> str:
+    """Get the file-level dependency graph for the project.
+
+    Nodes are indexed files; edges are imports with a resolved
+    target file (resolved_file_id IS NOT NULL).
+
+    Args:
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        result = get_dependency_graph(conn, proj.id)
+        return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def find_import_cycles_tool(
+    project: str | None = None,
+) -> str:
+    """Find import cycles in the project's dependency graph.
+
+    Uses DFS with recursion-stack tracking to detect cycles.
+    Each cycle is returned as a list of file paths.
+
+    Args:
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        results = find_import_cycles(conn, proj.id)
+        return json.dumps(results, indent=2, default=str)
     except RuntimeError as e:
         return json.dumps({"error": str(e)})
     except Exception as e:

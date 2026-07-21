@@ -269,6 +269,8 @@ async def test_tool_registration(mcp_conn):
     assert "diff_impact_tool" in names
     assert "find_unused_symbols_tool" in names
     assert "find_dead_imports_tool" in names
+    assert "get_dependency_graph_tool" in names
+    assert "find_import_cycles_tool" in names
 
 
 @pytest.mark.anyio

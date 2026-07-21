@@ -8,7 +8,9 @@ from memos.api.schemas import (
     CallEdgeResponse,
     ContextResponse,
     DeadImportsResponse,
+    DependencyGraphResponse,
     DiffImpactResponse,
+    ImportCyclesResponse,
     MemoryCreateRequest,
     MemoryEntryResponse,
     ModuleResponse,
@@ -22,9 +24,11 @@ from memos.query.core import (
     add_memory_entry,
     find_calls_by_id,
     find_dead_imports,
+    find_import_cycles,
     find_symbol,
     find_unused_symbols,
     get_context,
+    get_dependency_graph,
     get_diff_impact,
     get_memory_entries,
     get_module,
@@ -100,6 +104,24 @@ def api_rename_impact(symbol_id: int):
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])
         return result
+    finally:
+        conn.close()
+
+
+@app.get("/dependency-graph", response_model=DependencyGraphResponse)
+def api_dependency_graph():
+    conn, project = _get_conn_and_project()
+    try:
+        return get_dependency_graph(conn, project.id)
+    finally:
+        conn.close()
+
+
+@app.get("/import-cycles", response_model=ImportCyclesResponse)
+def api_import_cycles():
+    conn, project = _get_conn_and_project()
+    try:
+        return {"cycles": find_import_cycles(conn, project.id)}
     finally:
         conn.close()
 

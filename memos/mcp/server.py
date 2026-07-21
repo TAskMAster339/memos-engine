@@ -10,8 +10,10 @@ from memos.query.core import (
     find_calls,
     find_symbol,
     get_context,
+    get_diff_impact,
     get_memory_entries,
     get_module,
+    get_rename_impact,
     list_files,
     list_symbols,
     semantic_search,
@@ -239,6 +241,60 @@ def get_context_tool(
     try:
         conn, _proj = _ensure_project(project)
         result = get_context(conn, symbol_id)
+        if "error" in result:
+            return json.dumps(result)
+        return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def rename_impact_tool(
+    symbol_id: int,
+    project: str | None = None,
+) -> str:
+    """Analyse what would break if a symbol were renamed.
+
+    Returns the symbol definition, all callers, type references (textual),
+    and import references pointing to the symbol's file.
+
+    Args:
+        symbol_id: ID of the symbol to analyse
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, _proj = _ensure_project(project)
+        result = get_rename_impact(conn, symbol_id)
+        if "error" in result:
+            return json.dumps(result)
+        return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def diff_impact_tool(
+    path: str,
+    project: str | None = None,
+) -> str:
+    """Show who depends on exported symbols in a file.
+
+    For each exported symbol lists the unique caller files and call count.
+    Use this before modifying a public API to understand blast radius.
+
+    Args:
+        path: Relative file path (e.g. 'src/utils.ts')
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        result = get_diff_impact(conn, path, proj.id)
         if "error" in result:
             return json.dumps(result)
         return json.dumps(result, indent=2, default=str)

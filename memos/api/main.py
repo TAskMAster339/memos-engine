@@ -7,9 +7,11 @@ from pydantic import BaseModel
 from memos.api.schemas import (
     CallEdgeResponse,
     ContextResponse,
+    DiffImpactResponse,
     MemoryCreateRequest,
     MemoryEntryResponse,
     ModuleResponse,
+    RenameImpactResponse,
     SemanticSearchResponse,
     SymbolResponse,
 )
@@ -19,8 +21,10 @@ from memos.query.core import (
     find_calls_by_id,
     find_symbol,
     get_context,
+    get_diff_impact,
     get_memory_entries,
     get_module,
+    get_rename_impact,
     semantic_search,
 )
 
@@ -77,6 +81,30 @@ def api_get_context(symbol_id: int):
     conn, _ = _get_conn_and_project()
     try:
         result = get_context(conn, symbol_id)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    finally:
+        conn.close()
+
+
+@app.get("/symbols/{symbol_id}/rename-impact", response_model=RenameImpactResponse)
+def api_rename_impact(symbol_id: int):
+    conn, _ = _get_conn_and_project()
+    try:
+        result = get_rename_impact(conn, symbol_id)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    finally:
+        conn.close()
+
+
+@app.get("/modules/{path:path}/diff-impact", response_model=DiffImpactResponse)
+def api_diff_impact(path: str):
+    conn, project = _get_conn_and_project()
+    try:
+        result = get_diff_impact(conn, path, project.id)
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])
         return result

@@ -12,6 +12,19 @@ class ContextResponse(BaseModel):
     generation_context: dict[str, Any] | None = None
 
 
+class RenameImpactResponse(BaseModel):
+    symbol: dict[str, Any]
+    callers: list[dict[str, Any]]
+    type_references: list[dict[str, Any]]
+    import_references: list[dict[str, Any]]
+    warning: str
+
+
+class DiffImpactResponse(BaseModel):
+    file: dict[str, Any]
+    exported_symbols: list[dict[str, Any]]
+
+
 class SymbolResponse(BaseModel):
     id: int
     file_id: int

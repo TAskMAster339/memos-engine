@@ -412,3 +412,106 @@ def get_context(
         "summary": summary_info["summary"],
         "generation_context": summary_info["generation_context"],
     }
+
+
+TYPE_KINDS = {"class", "interface", "type_alias", "struct", "enum"}
+
+
+def get_rename_impact(
+    conn,
+    symbol_id: int,
+) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT s.*, f.path AS file_path, f.language AS file_language, "
+        "f.project_id AS project_id "
+        "FROM symbols s JOIN files f ON f.id = s.file_id "
+        "WHERE s.id = ?",
+        (symbol_id,),
+    ).fetchone()
+    if row is None:
+        return {"error": f"symbol not found: {symbol_id}"}
+
+    sym = dict(row)
+    callers = find_calls_by_id(conn, symbol_id, direction="callers")
+
+    type_references: list[dict[str, Any]] = []
+    if sym["kind"] in TYPE_KINDS:
+        refs = conn.execute(
+            "SELECT s2.id, s2.name, s2.kind, s2.signature, "
+            "f2.path AS file_path "
+            "FROM symbols s2 "
+            "JOIN files f2 ON f2.id = s2.file_id "
+            "WHERE s2.id != ? AND f2.project_id = ? "
+            "AND s2.signature IS NOT NULL "
+            "AND s2.signature LIKE ?",
+            (symbol_id, sym["project_id"], f"%{sym['name']}%"),
+        ).fetchall()
+        type_references = [dict(r) for r in refs]
+
+    imports: list[dict[str, Any]] = []
+    imp_rows = conn.execute(
+        "SELECT * FROM imports WHERE resolved_file_id = ?",
+        (sym["file_id"],),
+    ).fetchall()
+    if imp_rows:
+        imports = [dict(r) for r in imp_rows]
+
+    return {
+        "symbol": {
+            "id": sym["id"],
+            "name": sym["name"],
+            "kind": sym["kind"],
+            "file_path": sym["file_path"],
+            "start_line": sym["start_line"],
+            "end_line": sym["end_line"],
+        },
+        "callers": callers,
+        "type_references": type_references,
+        "import_references": imports,
+        "warning": (
+            "textual heuristic — does not resolve shadowed names or re-exports"
+        ),
+    }
+
+
+def get_diff_impact(
+    conn,
+    file_path: str,
+    project_id: int,
+) -> dict[str, Any]:
+    file_row = conn.execute(
+        "SELECT * FROM files WHERE project_id = ? AND path = ?",
+        (project_id, file_path),
+    ).fetchone()
+    if file_row is None:
+        return {"error": f"file not found: {file_path}"}
+
+    file_dict = dict(file_row)
+    exported = conn.execute(
+        "SELECT s.* FROM symbols s WHERE s.file_id = ? AND s.exported = 1 "
+        "ORDER BY s.start_line",
+        (file_dict["id"],),
+    ).fetchall()
+
+    exported_symbols: list[dict[str, Any]] = []
+    for sym_row in exported:
+        sym = dict(sym_row)
+        callers = find_calls_by_id(conn, sym["id"], direction="callers")
+        caller_file_counts: dict[str, int] = {}
+        for c in callers:
+            p = c["file"]
+            caller_file_counts[p] = caller_file_counts.get(p, 0) + 1
+        caller_files = [
+            {"file": p, "count": cnt}
+            for p, cnt in sorted(caller_file_counts.items())
+        ]
+        exported_symbols.append({
+            "name": sym["name"],
+            "kind": sym["kind"],
+            "caller_files": caller_files,
+        })
+
+    return {
+        "file": {"path": file_dict["path"], "language": file_dict["language"]},
+        "exported_symbols": exported_symbols,
+    }

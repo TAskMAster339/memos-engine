@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from memos.api.schemas import (
     CallEdgeResponse,
+    ContextResponse,
     MemoryCreateRequest,
     MemoryEntryResponse,
     ModuleResponse,
@@ -17,6 +18,7 @@ from memos.query.core import (
     add_memory_entry,
     find_calls_by_id,
     find_symbol,
+    get_context,
     get_memory_entries,
     get_module,
     semantic_search,
@@ -66,6 +68,18 @@ def api_find_symbol(
             file_path=file,
             project_id=project.id,
         )
+    finally:
+        conn.close()
+
+
+@app.get("/symbols/{symbol_id}/context", response_model=ContextResponse)
+def api_get_context(symbol_id: int):
+    conn, _ = _get_conn_and_project()
+    try:
+        result = get_context(conn, symbol_id)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
     finally:
         conn.close()
 

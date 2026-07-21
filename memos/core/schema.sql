@@ -1,5 +1,5 @@
 -- Schema reference: latest version of the database schema.
--- The authoritative copy is in migrations/0001_init.sql and 0002_vec.sql.
+-- The authoritative copy is in migrations/0001_init.sql, 0002_vec.sql, and 0003_prompt_version.sql.
 
 CREATE TABLE schema_version (version INTEGER NOT NULL);
 
@@ -62,6 +62,7 @@ CREATE TABLE memory_entries (
   content TEXT NOT NULL,
   source TEXT NOT NULL,
   source_hash TEXT,
+  prompt_version TEXT DEFAULT '0',
   created_at TEXT NOT NULL
 );
 CREATE INDEX idx_memory_scope ON memory_entries(scope_type, scope_id);

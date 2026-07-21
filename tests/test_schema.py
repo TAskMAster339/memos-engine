@@ -20,4 +20,4 @@ def test_all_tables_exist(conn):
 
 def test_schema_version(conn):
     version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-    assert version == 2
+    assert version == 3

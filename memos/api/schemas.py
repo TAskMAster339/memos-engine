@@ -3,6 +3,15 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class ContextResponse(BaseModel):
+    symbol: dict[str, Any]
+    callers: list[dict[str, Any]]
+    callees: list[dict[str, Any]]
+    memories: list[dict[str, Any]]
+    summary: dict[str, Any] | None = None
+    generation_context: dict[str, Any] | None = None
+
+
 class SymbolResponse(BaseModel):
     id: int
     file_id: int

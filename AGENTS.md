@@ -14,6 +14,8 @@
 | `uv run memos serve --path . --port 8000` | start FastAPI server |
 | `uv run memos serve-mcp --path .` | start MCP server (stdio) |
 | `uv run pytest tests/test_mcp.py` | MCP server tests |
+| `uv run pytest tests/test_llm_summary.py` | LLM summary tests |
+| `curl http://localhost:8000/symbols/{id}/context` | API: get context for symbol |
 | `uv add <pkg>` | add dependency |
 | `uv add --dev <pkg>` | add dev dependency |
 | `uv sync` | reinstall after pyproject.toml changes |
@@ -35,7 +37,8 @@ memos/
     diff.py         # compute_file_hash, should_reindex
   query/
     core.py         # find_symbol, find_calls, get_module, find_calls_by_id, semantic_search,
-                    # list_files, list_symbols — pure query layer over db
+                    # list_files, list_symbols, get_or_generate_summary, get_context
+                    # — pure query layer over db
   api/
     main.py         # FastAPI app — thin adapter over query/core.py
     schemas.py      # pydantic response models for API
@@ -64,6 +67,7 @@ tests/
   test_api.py                 # 7 integration tests: FastAPI endpoints
   test_mcp.py                 # 15 tests: MCP server tools
   test_semantic_search.py     # 8 tests: VecStore CRUD + semantic_search query
+  test_llm_summary.py         # 11 tests: get_or_generate_summary, get_context, source_hash
   test_migrations.py          # 2 tests: idempotent re-run
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
@@ -103,7 +107,6 @@ tests/
 
 ## What does not exist yet
 
-- LLM summary generation — Iteration 4
 - CI, linting, type checking, codegen — none configured
 
 ## Execution order (from spec §6)
@@ -117,4 +120,4 @@ tests/
 7. ✅ Semantic search (sqlite-vec + sentence-transformers)
 8. ✅ MCP server
 9. ✅ `memory_entries` write-path via `memory_add_note`
-10. LLM enrichment: `get_or_generate_summary()` with content_hash check
+10. ✅ LLM enrichment: `get_or_generate_summary()` with content_hash check, `get_context()` composite function

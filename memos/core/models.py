@@ -61,4 +61,5 @@ class MemoryEntry(BaseModel):
     content: str
     source: str
     source_hash: str | None = None
+    prompt_version: str | None = None
     created_at: str

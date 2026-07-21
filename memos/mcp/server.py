@@ -8,6 +8,7 @@ from memos.query.core import (
     add_memory_entry,
     find_calls,
     find_symbol,
+    get_context,
     get_memory_entries,
     get_module,
     list_files,
@@ -214,6 +215,34 @@ def get_module_tool(path: str, project: str | None = None) -> str:
 
 
 @mcp.tool()
+def get_context_tool(
+    symbol_id: int,
+    project: str | None = None,
+) -> str:
+    """Composite call: returns symbol + callers + callees + memory entries
+    + LLM summary (if cached) or generation context (if not yet generated).
+
+    This is the primary tool to call before modifying a function — it replaces
+    re-reading the whole file and its dependents.
+
+    Args:
+        symbol_id: ID of the symbol to get full context for
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, _proj = _ensure_project(project)
+        result = get_context(conn, symbol_id)
+        if "error" in result:
+            return json.dumps(result)
+        return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
 def semantic_search_tool(
     query: str,
     top_k: int = 10,
@@ -300,11 +329,12 @@ def list_symbols_tool(
 
 
 @mcp.tool()
-def memory_add_note(
+def memory_add_note(  # noqa: PLR0913
     content: str,
     scope_type: str = "project",
     scope_id: int | None = None,
     kind: str = "note",
+    source_hash: str | None = None,
     project: str | None = None,
 ) -> str:
     """Add a note to the project's episodic memory. Notes persist across reindexing.
@@ -316,6 +346,8 @@ def memory_add_note(
         scope_id: ID of the file or symbol this memory belongs to
             (required when scope_type is file or symbol)
         kind: Kind of memory — 'note', 'summary', or 'decision'
+        source_hash: Optional explicit source_hash (e.g. symbol content_hash
+            for kind='summary'). Defaults to sha256 of content.
         project: Project root path (must have been opened via open_project).
             Defaults to the most recently opened project.
     """
@@ -329,6 +361,7 @@ def memory_add_note(
             scope_id=scope_id,
             kind=kind,
             source="agent",
+            source_hash=source_hash,
         )
         conn.commit()
         return json.dumps(result, indent=2, default=str)

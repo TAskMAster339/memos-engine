@@ -256,7 +256,8 @@ def get_imports_for_file(conn: sqlite3.Connection, file_id: int) -> list[Import]
 def insert_memory_entry(conn: sqlite3.Connection, entry: MemoryEntry) -> MemoryEntry:
     cur = conn.execute(
         "INSERT INTO memory_entries (project_id, scope_type, scope_id, kind, content, "
-        "source, source_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "source, source_hash, prompt_version, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             entry.project_id,
             entry.scope_type,
@@ -265,6 +266,7 @@ def insert_memory_entry(conn: sqlite3.Connection, entry: MemoryEntry) -> MemoryE
             entry.content,
             entry.source,
             entry.source_hash,
+            entry.prompt_version,
             entry.created_at,
         ),
     )

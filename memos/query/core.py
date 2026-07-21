@@ -282,9 +282,11 @@ def add_memory_entry(  # noqa: PLR0913
     scope_id: int | None = None,
     kind: str = "note",
     source: str = "agent",
+    source_hash: str | None = None,
 ) -> dict[str, Any]:
     now = datetime.now(UTC).isoformat()
-    source_hash = hashlib.sha256(content.encode()).hexdigest()
+    if source_hash is None:
+        source_hash = hashlib.sha256(content.encode()).hexdigest()
     cur = conn.execute(
         "INSERT INTO memory_entries "
         "(project_id, scope_type, scope_id, kind, content, "
@@ -314,3 +316,102 @@ def get_memory_entries(
         params.append(scope_type)
     sql += " ORDER BY created_at DESC"
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+CURRENT_PROMPT_VERSION = "1"
+
+
+CURRENT_PROMPT_VERSION = "1"
+
+
+def get_or_generate_summary(
+    conn,
+    symbol_id: int,
+    content_hash: str,
+) -> dict[str, Any]:
+    summary = conn.execute(
+        "SELECT * FROM memory_entries "
+        "WHERE scope_type = 'symbol' AND scope_id = ? "
+        "AND kind = 'summary' AND source_hash = ? "
+        "AND (prompt_version IS NULL OR prompt_version = ?)",
+        (symbol_id, content_hash, CURRENT_PROMPT_VERSION),
+    ).fetchone()
+
+    if summary is not None:
+        return {"summary": dict(summary), "generation_context": None}
+
+    row = conn.execute(
+        "SELECT s.*, f.path AS file_path, f.language AS file_language, "
+        "f.project_id AS project_id "
+        "FROM symbols s JOIN files f ON f.id = s.file_id "
+        "WHERE s.id = ?",
+        (symbol_id,),
+    ).fetchone()
+    if row is None:
+        return {"summary": None, "generation_context": None}
+
+    sym = dict(row)
+    callers = find_calls_by_id(conn, symbol_id, direction="callers")
+    return {
+        "summary": None,
+        "generation_context": {
+            "symbol_id": sym["id"],
+            "name": sym["name"],
+            "kind": sym["kind"],
+            "signature": sym["signature"],
+            "file_path": sym["file_path"],
+            "file_language": sym["file_language"],
+            "start_line": sym["start_line"],
+            "end_line": sym["end_line"],
+            "exported": bool(sym["exported"]),
+            "content_hash": sym["content_hash"],
+            "callers": [
+                {
+                    "name": c["caller_name"],
+                    "kind": c["caller_kind"],
+                    "file": c["file"],
+                    "line": c["line"],
+                }
+                for c in callers
+            ],
+        },
+    }
+
+
+def get_context(
+    conn,
+    symbol_id: int,
+) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT s.*, f.path AS file_path, f.language AS file_language, "
+        "f.project_id AS project_id "
+        "FROM symbols s JOIN files f ON f.id = s.file_id "
+        "WHERE s.id = ?",
+        (symbol_id,),
+    ).fetchone()
+    if row is None:
+        return {"error": f"symbol not found: {symbol_id}"}
+
+    symbol = dict(row)
+    callers = find_calls_by_id(conn, symbol_id, direction="callers")
+    callees = find_calls_by_id(conn, symbol_id, direction="callees")
+    memories = get_memory_entries(
+        conn,
+        symbol["project_id"],
+        scope_type="symbol",
+        scope_id=symbol_id,
+    )
+    summary_info = get_or_generate_summary(
+        conn,
+        symbol_id,
+        symbol["content_hash"],
+    )
+
+    return {
+        "symbol": symbol,
+        "callers": callers,
+        "callees": callees,
+        "memories": memories,
+        "summary": summary_info["summary"],
+        "generation_context": summary_info["generation_context"],
+    }

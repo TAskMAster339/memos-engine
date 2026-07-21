@@ -1,6 +1,6 @@
 [project]
 name = "memos-engine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Memory OS for AI coding agents — structural code index with episodic memory"
 readme = "README.md"
 requires-python = ">=3.12"

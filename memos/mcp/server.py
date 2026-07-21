@@ -8,7 +8,9 @@ from memos.core.db import get_connection, get_project_by_root, run_migrations
 from memos.query.core import (
     add_memory_entry,
     find_calls,
+    find_dead_imports,
     find_symbol,
+    find_unused_symbols,
     get_context,
     get_diff_impact,
     get_memory_entries,
@@ -298,6 +300,52 @@ def diff_impact_tool(
         if "error" in result:
             return json.dumps(result)
         return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def find_unused_symbols_tool(
+    project: str | None = None,
+) -> str:
+    """Find private functions/methods that are never called (dead code).
+
+    Only considers functions and methods — types and interfaces are excluded
+    (they have different usage semantics).
+
+    Args:
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        results = find_unused_symbols(conn, proj.id)
+        return json.dumps(results, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def find_dead_imports_tool(
+    project: str | None = None,
+) -> str:
+    """Find imports that could not be resolved to any indexed file.
+
+    These may be external npm/go modules or genuinely missing files.
+    Each result includes a 'likely_external' boolean heuristic.
+
+    Args:
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        results = find_dead_imports(conn, proj.id)
+        return json.dumps(results, indent=2, default=str)
     except RuntimeError as e:
         return json.dumps({"error": str(e)})
     except Exception as e:

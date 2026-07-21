@@ -20,6 +20,14 @@ class RenameImpactResponse(BaseModel):
     warning: str
 
 
+class UnusedSymbolsResponse(BaseModel):
+    symbols: list[dict[str, Any]]
+
+
+class DeadImportsResponse(BaseModel):
+    imports: list[dict[str, Any]]
+
+
 class DiffImpactResponse(BaseModel):
     file: dict[str, Any]
     exported_symbols: list[dict[str, Any]]

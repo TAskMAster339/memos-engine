@@ -515,3 +515,52 @@ def get_diff_impact(
         "file": {"path": file_dict["path"], "language": file_dict["language"]},
         "exported_symbols": exported_symbols,
     }
+
+
+def find_unused_symbols(
+    conn,
+    project_id: int,
+) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT s.*, f.path AS file_path, f.language AS file_language "
+        "FROM symbols s "
+        "JOIN files f ON f.id = s.file_id "
+        "WHERE f.project_id = ? "
+        "AND s.exported = 0 "
+        "AND s.kind IN ('function', 'method') "
+        "AND s.id NOT IN ("
+        "  SELECT callee_symbol_id FROM call_edges "
+        "  WHERE callee_symbol_id IS NOT NULL"
+        ") "
+        "ORDER BY f.path, s.start_line",
+        (project_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def find_dead_imports(
+    conn,
+    project_id: int,
+) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT i.*, f.path AS file_path, f.language AS file_language "
+        "FROM imports i "
+        "JOIN files f ON f.id = i.file_id "
+        "WHERE f.project_id = ? "
+        "AND i.resolved_file_id IS NULL "
+        "ORDER BY f.path, i.imported_path",
+        (project_id,),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        imp = dict(r)
+        path = imp["imported_path"]
+        lang = imp["file_language"]
+        if lang == "typescript":
+            imp["likely_external"] = not path.startswith((".", "/"))
+        elif lang == "go":
+            imp["likely_external"] = "/" not in path
+        else:
+            imp["likely_external"] = False
+        out.append(imp)
+    return out

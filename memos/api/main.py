@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from memos.api.schemas import (
     CallEdgeResponse,
     ContextResponse,
+    DeadImportsResponse,
     DiffImpactResponse,
     MemoryCreateRequest,
     MemoryEntryResponse,
@@ -14,12 +15,15 @@ from memos.api.schemas import (
     RenameImpactResponse,
     SemanticSearchResponse,
     SymbolResponse,
+    UnusedSymbolsResponse,
 )
 from memos.core.db import get_connection, get_project_by_root, run_migrations
 from memos.query.core import (
     add_memory_entry,
     find_calls_by_id,
+    find_dead_imports,
     find_symbol,
+    find_unused_symbols,
     get_context,
     get_diff_impact,
     get_memory_entries,
@@ -96,6 +100,24 @@ def api_rename_impact(symbol_id: int):
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])
         return result
+    finally:
+        conn.close()
+
+
+@app.get("/unused-symbols", response_model=UnusedSymbolsResponse)
+def api_unused_symbols():
+    conn, project = _get_conn_and_project()
+    try:
+        return {"symbols": find_unused_symbols(conn, project.id)}
+    finally:
+        conn.close()
+
+
+@app.get("/dead-imports", response_model=DeadImportsResponse)
+def api_dead_imports():
+    conn, project = _get_conn_and_project()
+    try:
+        return {"imports": find_dead_imports(conn, project.id)}
     finally:
         conn.close()
 

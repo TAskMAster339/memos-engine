@@ -267,6 +267,8 @@ async def test_tool_registration(mcp_conn):
     assert "get_memories" in names
     assert "rename_impact_tool" in names
     assert "diff_impact_tool" in names
+    assert "find_unused_symbols_tool" in names
+    assert "find_dead_imports_tool" in names
 
 
 @pytest.mark.anyio

@@ -20,6 +20,8 @@ from memos.query.core import (
     get_rename_impact,
     list_files,
     list_symbols,
+    memory_prune,
+    memory_search,
     semantic_search,
 )
 
@@ -552,6 +554,69 @@ def get_memories(
             scope_id=scope_id,
         )
         return json.dumps(results, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def memory_search_tool(
+    query: str,
+    top_k: int = 10,
+    project: str | None = None,
+) -> str:
+    """Full-text search over memory entries using FTS5.
+
+    Args:
+        query: Search query (phrase matching via FTS5)
+        top_k: Maximum number of results (default 10)
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        results = memory_search(conn, proj.id, query, top_k=top_k)
+        return json.dumps(results, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@mcp.tool()
+def memory_prune_tool(
+    older_than_days: int | None = None,
+    kind: str | None = None,
+    *,
+    apply: bool = False,
+    project: str | None = None,
+) -> str:
+    """Delete stale memory entries.
+
+    By default runs in dry-run mode — returns count without deleting.
+    Pass apply=True to actually delete entries matching the filters.
+
+    Args:
+        older_than_days: Delete entries older than this many days
+        kind: Filter by entry kind ('note', 'summary', 'decision')
+        apply: If True, actually delete; if False, dry-run (default)
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        count = memory_prune(
+            conn,
+            proj.id,
+            older_than_days=older_than_days,
+            kind=kind,
+            apply=apply,
+        )
+        return json.dumps({
+            "count": count,
+            "dry_run": not apply,
+        }, indent=2, default=str)
     except RuntimeError as e:
         return json.dumps({"error": str(e)})
     except Exception as e:

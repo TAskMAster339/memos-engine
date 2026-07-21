@@ -614,6 +614,53 @@ def find_import_cycles(
     return cycles
 
 
+def memory_search(
+    conn,
+    project_id: int,
+    query: str,
+    top_k: int = 10,
+) -> list[dict[str, Any]]:
+    fts_query = f'"{query}"'
+    rows = conn.execute(
+        "SELECT me.* "
+        "FROM memory_fts f "
+        "JOIN memory_entries me ON me.id = f.rowid "
+        "WHERE memory_fts MATCH ? AND f.project_id = ? "
+        "ORDER BY rank "
+        "LIMIT ?",
+        (fts_query, project_id, top_k),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def memory_prune(
+    conn,
+    project_id: int,
+    older_than_days: int | None = None,
+    kind: str | None = None,
+    *,
+    apply: bool = False,
+) -> int:
+    clauses = ["project_id = ?"]
+    params: list[Any] = [project_id]
+    if older_than_days is not None:
+        clauses.append("created_at < datetime('now', ?)")
+        params.append(f"-{older_than_days} days")
+    if kind is not None:
+        clauses.append("kind = ?")
+        params.append(kind)
+    where = " AND ".join(clauses)
+
+    if apply:
+        conn.execute(f"DELETE FROM memory_entries WHERE {where}", params)
+        return conn.execute("SELECT changes()").fetchone()[0]
+
+    return conn.execute(
+        f"SELECT COUNT(*) FROM memory_entries WHERE {where}",
+        params,
+    ).fetchone()[0]
+
+
 def find_dead_imports(
     conn,
     project_id: int,

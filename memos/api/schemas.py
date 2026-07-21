@@ -81,6 +81,23 @@ class SemanticSearchResponse(BaseModel):
     results: list[dict[str, Any]]
 
 
+class MemorySearchResponse(BaseModel):
+    query: str
+    top_k: int
+    results: list[dict[str, Any]]
+
+
+class MemoryPruneResponse(BaseModel):
+    count: int
+    dry_run: bool
+
+
+class MemoryPruneRequest(BaseModel):
+    older_than_days: int | None = None
+    kind: str | None = None
+    apply: bool = False
+
+
 class MemoryEntryResponse(BaseModel):
     id: int
     project_id: int

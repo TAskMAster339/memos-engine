@@ -26,7 +26,7 @@ def test_migrations_idempotent():
     v2 = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
 
     assert tables_before == tables_after
-    assert v1 == v2 == 3
+    assert v1 == v2 == 4
     conn.close()
 
 
@@ -35,6 +35,6 @@ def test_fresh_database_gets_schema():
     run_migrations(conn)
 
     row_count = conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0]
-    assert row_count == 3
+    assert row_count == 4
 
     conn.close()

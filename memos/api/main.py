@@ -13,6 +13,9 @@ from memos.api.schemas import (
     ImportCyclesResponse,
     MemoryCreateRequest,
     MemoryEntryResponse,
+    MemoryPruneRequest,
+    MemoryPruneResponse,
+    MemorySearchResponse,
     ModuleResponse,
     RenameImpactResponse,
     SemanticSearchResponse,
@@ -33,6 +36,8 @@ from memos.query.core import (
     get_memory_entries,
     get_module,
     get_rename_impact,
+    memory_prune,
+    memory_search,
     semantic_search,
 )
 
@@ -210,6 +215,37 @@ def api_create_memory(body: MemoryCreateRequest):
         )
         conn.commit()
         return result
+    finally:
+        conn.close()
+
+
+@app.get("/memories/search", response_model=MemorySearchResponse)
+def api_memory_search(
+    query: str = Query(...),
+    top_k: int = Query(10),
+):
+    conn, project = _get_conn_and_project()
+    try:
+        results = memory_search(conn, project.id, query, top_k=top_k)
+        return {"query": query, "top_k": top_k, "results": results}
+    finally:
+        conn.close()
+
+
+@app.post("/memories/prune", response_model=MemoryPruneResponse)
+def api_memory_prune(body: MemoryPruneRequest):
+    conn, project = _get_conn_and_project()
+    try:
+        count = memory_prune(
+            conn,
+            project.id,
+            older_than_days=body.older_than_days,
+            kind=body.kind,
+            apply=body.apply,
+        )
+        if body.apply:
+            conn.commit()
+        return {"count": count, "dry_run": not body.apply}
     finally:
         conn.close()
 

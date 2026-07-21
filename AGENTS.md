@@ -3,7 +3,7 @@
 ## Workflow
 
 After completing each task: `ruff check .` + `pytest` green, then commit with
-a descriptive message of what was done.
+a short descriptive title and all details in the commit body.
 
 ## Commands
 

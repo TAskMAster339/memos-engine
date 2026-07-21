@@ -561,6 +561,81 @@ def get_memories(
 
 
 @mcp.tool()
+def reindex_file_tool(
+    path: str,
+    project: str | None = None,
+) -> str:
+    """Re-index a single file after editing.
+
+    Parses the file, updates symbols/call edges/imports in the index,
+    then resolves any new unresolved call edges.
+
+    Args:
+        path: Relative file path (e.g. 'src/utils.ts')
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    from memos.cli.main import EXTENSION_INDEXERS, index_file  # noqa: PLC0415
+    from memos.core.db import resolve_call_edges  # noqa: PLC0415
+
+    try:
+        conn, proj = _ensure_project(project)
+        rel_path = path
+        full_path = str(Path(proj.root_path) / rel_path)
+
+        if not Path(full_path).exists():
+            return json.dumps({"error": f"file not found: {full_path}"})
+
+        ext = Path(full_path).suffix.lower()
+        indexer = EXTENSION_INDEXERS.get(ext)
+        if indexer is None:
+            return json.dumps({
+                "error": f"unsupported extension: {ext} "
+                f"(supported: {', '.join(EXTENSION_INDEXERS)})",
+            })
+
+        reindexed = index_file(
+            conn,
+            proj,
+            full_path,
+            rel_path,
+            indexer,
+            full=False,
+            embed=True,
+        )
+
+        if reindexed:
+            unresolved = conn.execute(
+                "SELECT COUNT(*) FROM call_edges ce "
+                "JOIN symbols s ON s.id = ce.caller_symbol_id "
+                "JOIN files f ON f.id = s.file_id "
+                "WHERE f.project_id = ? AND ce.callee_symbol_id IS NULL",
+                (proj.id,),
+            ).fetchone()[0]
+            if unresolved > 0:
+                resolve_call_edges(conn, proj.id)
+
+        conn.commit()
+
+        sym_count = conn.execute(
+            "SELECT COUNT(*) FROM symbols s "
+            "JOIN files f ON f.id = s.file_id "
+            "WHERE f.project_id = ? AND f.path = ?",
+            (proj.id, rel_path),
+        ).fetchone()[0]
+
+        return json.dumps({
+            "path": rel_path,
+            "reindexed": reindexed,
+            "symbols": sym_count,
+        }, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"reindex failed: {e}"})
+
+
+@mcp.tool()
 def memory_search_tool(
     query: str,
     top_k: int = 10,

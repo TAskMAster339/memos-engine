@@ -1,8 +1,10 @@
 import argparse
+import asyncio
 import json
 import os
 import sys
 from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
 
 import uvicorn
@@ -34,6 +36,7 @@ from memos.indexer.diff import compute_file_hash, should_reindex
 from memos.indexer.go import GoIndexer
 from memos.indexer.python import PythonIndexer
 from memos.indexer.typescript import TypeScriptIndexer
+from memos.mcp.server import mcp
 from memos.query.core import (
     add_memory_entry,
     find_calls,
@@ -340,9 +343,6 @@ def cmd_memory_list(args):
 
 
 def cmd_tools(args):
-    import asyncio
-
-    from memos.mcp.server import mcp
 
     tools = asyncio.run(mcp.list_tools())
     for t in tools:
@@ -353,10 +353,12 @@ def cmd_tools(args):
     print(f"\nTotal: {len(tools)} tools")
 
 
-def main():
+def main():  # noqa: PLR0915
     parser = argparse.ArgumentParser(prog="memos")
     parser.add_argument(
-        "--version", action="store_true", help="Show version and exit"
+        "--version",
+        action="store_true",
+        help="Show version and exit",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -414,7 +416,9 @@ def main():
     )
     p_mem_add.add_argument("--scope-id", type=int, help="Scope ID (file or symbol id)")
     p_mem_add.add_argument(
-        "--kind", default="note", help="Kind (note, summary, decision)"
+        "--kind",
+        default="note",
+        help="Kind (note, summary, decision)",
     )
     p_mem_add.add_argument("--source", default="agent", help="Source of the memory")
     p_mem_add.add_argument("--path", default=".", help="Project root path")
@@ -446,8 +450,6 @@ def main():
     p_tools.set_defaults(func=cmd_tools)
 
     if "--version" in sys.argv:
-        from importlib.metadata import version
-
         print(f"memos {version('memos-engine')}")
         sys.exit(0)
 

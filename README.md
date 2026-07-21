@@ -5,13 +5,61 @@
 `memos` builds a **structural index** (symbols, call edges, imports) of a
 TypeScript/TSX / Go codebase using tree-sitter and stores it in SQLite. It is the
 first layer of a larger *Memory OS* for AI coding agents — instead of
-grep-ing text, agents query **structure** (definitions, callers, callees).
+grepping text, agents query **structure** (definitions, callers, callees).
+
+## Integrating memos into your project
+
+To give your AI coding agent structural code understanding and persistent
+memory, add memos to your project in three steps:
+
+**1. Install memos**
+
+```bash
+pip install memos-engine
+# or via uv:
+uv tool install memos-engine
+```
+
+Or clone and install from source:
+
+```bash
+git clone https://github.com/taskmaster339/memos-engine.git
+cd memos-engine
+uv tool install -e .
+```
+
+**2. Index your project**
+
+```bash
+cd /path/to/your/project
+memos index --path .
+```
+
+This creates `{project}/.memos/memory.db` with all symbols, call edges,
+and imports. Subsequent runs skip unchanged files via content hash.
+
+**3. Add AGENTS_EXAMPLE.md to your project**
+
+Copy the file [`AGENTS_EXAMPLE.md`](AGENTS_EXAMPLE.md) from the memos repo
+into the root of **your** project as `AGENTS.md` (or `CLAUDE.md`, or
+`.opencode/instructions`, depending on your agent). It tells the agent:
+
+- To call `open_project` at the start of every session
+- To use `find_symbol_tool` / `find_calls_tool` instead of grep
+- To call `get_context_tool` before editing a function
+- To save decisions via `memory_add_note` so they survive across sessions
+
+Inside `AGENTS_EXAMPLE.md` you only need to change the repo path if your
+agent doesn't resolve relative paths automatically. Everything else is
+ready to use.
+
+**Optional: configure MCP** for your AI client — see [MCP Server](#mcp-server) below.
 
 ## Quick start
 
 ```bash
 # Clone and install globally
-git clone https://github.com/TAskMAster339/memos-engine.git
+git clone https://github.com/taskmaster339/memos-engine.git
 cd memos-engine
 uv tool install -e .
 
@@ -21,9 +69,6 @@ memos index --path /path/to/your/project
 # Start the MCP server for AI agents
 memos serve-mcp
 ```
-
-Indexes are stored at `{project}/.memos/memory.db`. Re-run to sync changes
-(files are skipped if their content hash hasn't changed).
 
 Or using `uv run` without global install:
 
@@ -187,8 +232,9 @@ Configure in `claude_desktop_config.json`:
     }
   }
 }
+```
 
-## Test
+## Tests
 
 ```bash
 uv run pytest -v

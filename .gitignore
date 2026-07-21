@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# memos local index database
+.memos/
+
 MEMORY_OS_ARCHITECTURE.md
 
 # C extensions

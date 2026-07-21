@@ -3,7 +3,7 @@
 [GitHub: TAskMAster339/memos-engine](https://github.com/TAskMAster339/memos-engine.git)
 
 `memos` builds a **structural index** (symbols, call edges, imports) of a
-TypeScript/TSX / Go codebase using tree-sitter and stores it in SQLite. It is the
+TypeScript/TSX / Go / Python codebase using tree-sitter and stores it in SQLite. It is the
 first layer of a larger *Memory OS* for AI coding agents — instead of
 grepping text, agents query **structure** (definitions, callers, callees).
 

@@ -32,6 +32,7 @@ from memos.core.db import (
 from memos.core.models import CallEdge, File, Import, Project, Symbol
 from memos.indexer.diff import compute_file_hash, should_reindex
 from memos.indexer.go import GoIndexer
+from memos.indexer.python import PythonIndexer
 from memos.indexer.typescript import TypeScriptIndexer
 from memos.query.core import (
     add_memory_entry,
@@ -46,6 +47,7 @@ EXTENSION_INDEXERS = {
     ".ts": TypeScriptIndexer(tsx=False),
     ".tsx": TypeScriptIndexer(tsx=True),
     ".go": GoIndexer(),
+    ".py": PythonIndexer(),
 }
 
 SKIP_DIRS = {".git", ".memos", "node_modules", "__pycache__", ".venv", "target"}

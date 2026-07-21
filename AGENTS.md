@@ -47,6 +47,7 @@ memos/
     base.py         # LanguageIndexer ABC + ParsedSymbol/Call/Import/Result dataclasses
     typescript.py   # TypeScriptIndexer (tree-sitter, handles .ts + .tsx)
     go.py           # GoIndexer (tree-sitter, export by name case)
+    python.py       # PythonIndexer (tree-sitter, export by _ prefix)  # NEW
     diff.py         # compute_file_hash, should_reindex
   query/
     core.py         # find_symbol, find_calls, get_module, find_calls_by_id, semantic_search,
@@ -73,12 +74,13 @@ tests/
   test_schema.py    # table existence checks
   test_crud.py      # CRUD + cascade delete
   test_migrations.py# idempotent re-run
-  test_typescript_indexer.py  # 18 unit tests on TS parsing
-  test_go_indexer.py          # 18 unit tests on Go parsing
-  test_cli_index.py           # 8 integration tests: index flow (TS + Go)
-  test_resolver.py            # 7 unit tests on call-edge resolution
-  test_query.py               # 12 unit tests on query/core.py
-  test_cli_query.py           # 7 integration tests: query flow (TS + Go)
+   test_typescript_indexer.py  # 18 unit tests on TS parsing
+   test_go_indexer.py          # 18 unit tests on Go parsing
+   test_python_indexer.py      # 18 unit tests on Python parsing
+   test_cli_index.py           # 11 integration tests: index flow (TS + Go + Python)
+   test_resolver.py            # 8 unit tests on call-edge resolution (+ Python)
+   test_query.py               # 12 unit tests on query/core.py
+   test_cli_query.py           # 10 integration tests: query flow (TS + Go + Python)
   test_api.py                 # 7 integration tests: FastAPI endpoints
   test_mcp.py                 # 15 tests: MCP server tools
   test_semantic_search.py     # 8 tests: VecStore CRUD + semantic_search query
@@ -92,13 +94,14 @@ tests/
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
     go_mini/src/            # 3 .go files for integration testing
+    python_mini/src/        # 3 .py files for integration testing  # NEW
     import_cycle/src/       # 2 .ts files with circular import
 ```
 
 ## Dependencies
 
 - **pydantic** — all CRUD returns models, not raw rows
-- **tree-sitter + tree-sitter-typescript + tree-sitter-go** — AST parsing (.ts, .tsx, .go)
+- **tree-sitter + tree-sitter-typescript + tree-sitter-go + tree-sitter-python** — AST parsing (.ts, .tsx, .go, .py)
 - **stdlib sqlite3** — connection mgmt, WAL journal, FK enforcement
 - **fastapi + uvicorn** — HTTP API
 - **mcp[cli]** — MCP server (FastMCP, stdio transport)
@@ -123,8 +126,10 @@ tests/
 - `callee_symbol_id` and `resolved_file_id` use `ON DELETE SET NULL` — when a callee symbol is deleted (e.g. during reindex), the FK is automatically nulled, then re-resolved in the second pass
 - `export` keyword detection (TS): `export_statement` wraps declarations; the walker passes `exported=True` to children
 - Go export: determined by `name[0].isupper()` — no `export_statement`
+- Python export: determined by `name[0] != '_'` — convention-based, like Go
 - Go methods: `method_declaration` nodes are separate from type declarations; receiver type is extracted from `receiver` field
 - Go imports: both single `import "x"` and grouped `import ( "x" "y" )` forms are handled via `import_spec` / `import_spec_list`
+- Python imports: `import_statement` (single/as) and `import_from_statement` (from/relative) — no resolver yet
 
 ## What does not exist yet
 

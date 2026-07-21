@@ -386,6 +386,72 @@ class TestResolveCallEdges:
 
         conn.close()
 
+    def test_py_cross_file_resolves(self):
+        conn = get_connection(":memory:")
+        run_migrations(conn)
+        project = insert_project(
+            conn,
+            Project(
+                root_path="/test/py",
+                name="py",
+                created_at=datetime.now(UTC).isoformat(),
+            ),
+        )
+        fmain = insert_file(
+            conn,
+            File(
+                project_id=project.id,
+                path="src/main.py",
+                language="python",
+                content_hash="hm",
+            ),
+        )
+        futils = insert_file(
+            conn,
+            File(
+                project_id=project.id,
+                path="src/utils.py",
+                language="python",
+                content_hash="hu",
+            ),
+        )
+
+        sym_main = insert_symbol(
+            conn,
+            Symbol(
+                file_id=fmain.id,
+                name="main",
+                kind="function",
+                start_line=1,
+                end_line=3,
+                content_hash="h1",
+            ),
+        )
+        sym_greet = insert_symbol(
+            conn,
+            Symbol(
+                file_id=futils.id,
+                name="greet",
+                kind="function",
+                exported=True,
+                start_line=1,
+                end_line=3,
+                content_hash="h2",
+            ),
+        )
+
+        e = CallEdge(caller_symbol_id=sym_main.id, callee_name="greet", line=2)
+        insert_call_edge(conn, e)
+        conn.commit()
+
+        resolved = resolve_call_edges(conn, project.id)
+        assert resolved == 1
+
+        row = conn.execute("SELECT callee_symbol_id FROM call_edges").fetchone()
+        assert row["callee_symbol_id"] == sym_greet.id
+
+        conn.close()
+
     def test_clears_dangling_references(self):
         conn = get_connection(":memory:")
         run_migrations(conn)

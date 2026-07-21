@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## Workflow
+
+After completing each task: `ruff check .` + `pytest` green, then commit with
+a descriptive message of what was done.
+
 ## Commands
 
 | Command | What |

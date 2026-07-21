@@ -207,7 +207,7 @@ def resolve_call_edges(conn: sqlite3.Connection, project_id: int) -> int:
         (project_id,),
     ).fetchall()
 
-    resolved = 0
+    updates: list[tuple[int, int]] = []
     for edge in edges:
         matches = conn.execute(
             """SELECT s.id, s.file_id, s.exported
@@ -221,13 +221,15 @@ def resolve_call_edges(conn: sqlite3.Connection, project_id: int) -> int:
         ).fetchall()
 
         if matches:
-            conn.execute(
-                "UPDATE call_edges SET callee_symbol_id = ? WHERE id = ?",
-                (matches[0]["id"], edge["id"]),
-            )
-            resolved += 1
+            updates.append((matches[0]["id"], edge["id"]))
 
-    return resolved
+    if updates:
+        conn.executemany(
+            "UPDATE call_edges SET callee_symbol_id = ? WHERE id = ?",
+            updates,
+        )
+
+    return len(updates)
 
 
 # ── Import ───────────────────────────────────────────────────────────────────

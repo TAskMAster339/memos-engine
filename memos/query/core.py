@@ -321,9 +321,6 @@ def get_memory_entries(
 CURRENT_PROMPT_VERSION = "1"
 
 
-CURRENT_PROMPT_VERSION = "1"
-
-
 def get_or_generate_summary(
     conn,
     symbol_id: int,

@@ -1,4 +1,5 @@
 import json
+import threading
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -20,22 +21,26 @@ mcp = FastMCP("Memory OS")
 
 _projects: dict[str, tuple] = {}
 _active_project: str | None = None
+_lock = threading.Lock()
 
 
 def _inject_conn(path, conn, project):
-    _projects[path] = (conn, project)
+    with _lock:
+        _projects[path] = (conn, project)
 
 
 def _ensure_project(path: str | None = None):
     resolved = path
     if resolved is None:
-        resolved = _active_project
+        with _lock:
+            resolved = _active_project
     if resolved is None:
         raise RuntimeError(
             "no project open — call open_project first, e.g. "
             'open_project(path="/path/to/project")',
         )
-    entry = _projects.get(resolved)
+    with _lock:
+        entry = _projects.get(resolved)
     if entry is None:
         raise RuntimeError(
             f"project {resolved} is not open — call open_project first",
@@ -100,7 +105,8 @@ def open_project(path: str) -> str:
     try:
         resolved = str(Path(path).resolve())
         conn, project = _open_project(resolved)
-        _active_project = resolved
+        with _lock:
+            _active_project = resolved
 
         file_count = conn.execute(
             "SELECT COUNT(*) FROM files WHERE project_id = ?",

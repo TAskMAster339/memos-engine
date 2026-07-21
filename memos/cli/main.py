@@ -76,90 +76,97 @@ def find_files(root: str) -> list[tuple[str, str]]:
     return sorted(files)
 
 
-def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True):  # noqa: PLR0913, C901
+def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True):  # noqa: PLR0913, PLR0912, C901
     current_hash = compute_file_hash(full_path)
     existing = get_file_by_path(conn, project.id, rel_path)
 
     if not should_reindex(existing, current_hash, full=full):
         return False
 
-    if existing is not None:
-        remove_vec_for_file(conn, existing.id)
-        delete_file(conn, existing.id)
+    conn.execute("SAVEPOINT index_file")
+    try:
+        if existing is not None:
+            remove_vec_for_file(conn, existing.id)
+            delete_file(conn, existing.id)
 
-    with Path(full_path).open(encoding="utf-8", errors="replace") as f:
-        source = f.read()
+        with Path(full_path).open(encoding="utf-8", errors="replace") as f:
+            source = f.read()
 
-    parse_result = indexer.parse(source, rel_path)
+        parse_result = indexer.parse(source, rel_path)
 
-    file = File(
-        project_id=project.id,
-        path=rel_path,
-        language=indexer.language(),
-        content_hash=current_hash,
-        mtime=Path(full_path).stat().st_mtime,
-    )
-    file = insert_file(conn, file)
-
-    name_to_id = {}
-    embed_ids: list[int] = []
-    embed_texts: list[str] = []
-    for ps in parse_result.symbols:
-        sym = Symbol(
-            file_id=file.id,
-            name=ps.name,
-            kind=ps.kind,
-            signature=ps.signature,
-            start_line=ps.start_line,
-            end_line=ps.end_line,
-            exported=ps.exported,
-            content_hash=ps.content_hash,
+        file = File(
+            project_id=project.id,
+            path=rel_path,
+            language=indexer.language(),
+            content_hash=current_hash,
+            mtime=Path(full_path).stat().st_mtime,
         )
-        sym = insert_symbol(conn, sym)
-        name_to_id[ps.name] = sym.id
+        file = insert_file(conn, file)
 
-        if embed:
-            embed_ids.append(sym.id)
-            text = f"{ps.name} {ps.kind}"
-            if ps.signature:
-                text += f" {ps.signature}"
-            embed_texts.append(text)
+        name_to_id = {}
+        embed_ids: list[int] = []
+        embed_texts: list[str] = []
+        for ps in parse_result.symbols:
+            sym = Symbol(
+                file_id=file.id,
+                name=ps.name,
+                kind=ps.kind,
+                signature=ps.signature,
+                start_line=ps.start_line,
+                end_line=ps.end_line,
+                exported=ps.exported,
+                content_hash=ps.content_hash,
+            )
+            sym = insert_symbol(conn, sym)
+            name_to_id[ps.name] = sym.id
 
-        if ps.parent_name:
-            parent_id = name_to_id.get(ps.parent_name)
-            if parent_id:
-                conn.execute(
-                    "UPDATE symbols SET parent_symbol_id = ? WHERE id = ?",
-                    (parent_id, sym.id),
-                )
+            if embed:
+                embed_ids.append(sym.id)
+                text = f"{ps.name} {ps.kind}"
+                if ps.signature:
+                    text += f" {ps.signature}"
+                embed_texts.append(text)
 
-    if embed and embed_ids:
-        from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+            if ps.parent_name:
+                parent_id = name_to_id.get(ps.parent_name)
+                if parent_id:
+                    conn.execute(
+                        "UPDATE symbols SET parent_symbol_id = ? WHERE id = ?",
+                        (parent_id, sym.id),
+                    )
 
-        embedder = FastEmbedEmbedding()
-        vecs = embedder.embed(embed_texts)
-        store = SqliteVecStore(conn)
-        store.add_batch(embed_ids, vecs)
+        if embed and embed_ids:
+            from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
 
-    for pc in parse_result.calls:
-        caller_id = name_to_id.get(pc.caller_name) if pc.caller_name else None
-        if caller_id is None:
-            continue
-        edge = CallEdge(
-            caller_symbol_id=caller_id,
-            callee_name=pc.callee_name,
-            line=pc.line,
-        )
-        insert_call_edge(conn, edge)
+            embedder = FastEmbedEmbedding()
+            vecs = embedder.embed(embed_texts)
+            store = SqliteVecStore(conn)
+            store.add_batch(embed_ids, vecs)
 
-    for pi in parse_result.imports:
-        imp = Import(
-            file_id=file.id,
-            imported_path=pi.imported_path,
-        )
-        insert_import(conn, imp)
+        for pc in parse_result.calls:
+            caller_id = name_to_id.get(pc.caller_name) if pc.caller_name else None
+            if caller_id is None:
+                continue
+            edge = CallEdge(
+                caller_symbol_id=caller_id,
+                callee_name=pc.callee_name,
+                line=pc.line,
+            )
+            insert_call_edge(conn, edge)
 
-    return True
+        for pi in parse_result.imports:
+            imp = Import(
+                file_id=file.id,
+                imported_path=pi.imported_path,
+            )
+            insert_import(conn, imp)
+
+        return True
+    except Exception:
+        conn.execute("ROLLBACK TO SAVEPOINT index_file")
+        raise
+    finally:
+        conn.execute("RELEASE SAVEPOINT index_file")
 
 
 def cmd_index(args):

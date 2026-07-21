@@ -2,10 +2,20 @@
 
 [GitHub: TAskMAster339/memos-engine](https://github.com/TAskMAster339/memos-engine.git)
 
+<div align="center">
+
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=fff)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=fff)
+![TSX](https://img.shields.io/badge/TSX-3178C6?logo=react&logoColor=fff)
+![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=fff)
+
+</div>
+
 `memos` builds a **structural index** (symbols, call edges, imports) of a
-TypeScript/TSX / Go / Python codebase using tree-sitter and stores it in SQLite. It is the
-first layer of a larger *Memory OS* for AI coding agents — instead of
-grepping text, agents query **structure** (definitions, callers, callees).
+TypeScript / TSX / Go / Python codebase using tree-sitter and stores it in
+SQLite. It is the first layer of a larger *Memory OS* for AI coding agents
+— instead of grepping text, agents query **structure** (definitions,
+callers, callees).
 
 ## Integrating memos into your project
 

@@ -102,6 +102,7 @@ def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True)
             language=indexer.language(),
             content_hash=current_hash,
             mtime=Path(full_path).stat().st_mtime,
+            last_indexed_at=datetime.now(UTC).isoformat(),
         )
         file = insert_file(conn, file)
 

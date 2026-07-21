@@ -117,6 +117,8 @@ a short descriptive title and all details in the commit body.
 
 | Command | What |
 |---------|------|
+| `memos --version` | show version |
+| `memos tools` | list available MCP tools |
 | `uv run pytest` | all tests |
 | `uv run pytest -v` | verbose |
 | `uv run pytest tests/test_crud.py::test_symbol_crud` | single test |
@@ -173,10 +175,12 @@ memos/
     embeddings.py   # FastEmbedEmbedding (all-MiniLM-L6-v2, 384-dim)
     sqlite_vec_store.py  # SqliteVecStore (sqlite-vec vec0 table)
   cli/
-    main.py         # argparse: "memos index [--path .] [--full] [--no-embed]"
+    main.py         # argparse: "memos [--version]"
+                    #          "memos index [--path .] [--full] [--no-embed]"
                     #          "memos query (symbol|calls|module)"
                     #          "memos serve [--path] [--port]"
                     #          "memos serve-mcp [--path]"
+                    #          "memos tools"
 tests/
   conftest.py       # fixture: in-memory sqlite with migrations applied
   test_schema.py    # table existence checks

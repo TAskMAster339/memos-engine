@@ -338,8 +338,25 @@ def cmd_memory_list(args):
     print(json.dumps(results, indent=2, default=str))
 
 
+def cmd_tools(args):
+    import asyncio
+
+    from memos.mcp.server import mcp
+
+    tools = asyncio.run(mcp.list_tools())
+    for t in tools:
+        print(f"  {t.name}")
+        if t.description:
+            desc = t.description.strip().split("\n")[0]
+            print(f"      {desc}")
+    print(f"\nTotal: {len(tools)} tools")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="memos")
+    parser.add_argument(
+        "--version", action="store_true", help="Show version and exit"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_index = sub.add_parser("index", help="Index project files")
@@ -423,6 +440,15 @@ def main():
         help=("Start MCP server (stdio). Use open_project tool to select a project."),
     )
     p_serve_mcp.set_defaults(func=cmd_serve_mcp)
+
+    p_tools = sub.add_parser("tools", help="List available MCP tools")
+    p_tools.set_defaults(func=cmd_tools)
+
+    if "--version" in sys.argv:
+        from importlib.metadata import version
+
+        print(f"memos {version('memos-engine')}")
+        sys.exit(0)
 
     args = parser.parse_args()
     args.func(args)

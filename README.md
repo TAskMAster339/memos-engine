@@ -81,8 +81,14 @@ git clone https://github.com/TAskMAster339/memos-engine.git
 cd memos-engine
 uv tool install -e .
 
+# Check version
+memos --version
+
 # Index a project
 memos index --path /path/to/your/project
+
+# List all available MCP tools
+memos tools
 
 # Start the MCP server for AI agents
 memos serve-mcp

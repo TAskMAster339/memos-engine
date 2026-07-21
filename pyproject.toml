@@ -1,9 +1,17 @@
 [project]
-name = "memos"
+name = "memos-engine"
 version = "0.1.0"
-description = "Memory OS for OpenCode — structural code index with episodic memory"
+description = "Memory OS for AI coding agents — structural code index with episodic memory"
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [{ name = "TAskMAster339" }]
+license = { text = "MIT" }
+keywords = ["mcp", "code-index", "ast", "tree-sitter", "ai-agents"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "pydantic",
     "tree-sitter>=0.26.0",
@@ -17,6 +25,9 @@ dependencies = [
     "mcp[cli]>=1.28.1",
 ]
 
+[project.urls]
+Repository = "https://github.com/TAskMAster339/memos-engine"
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
@@ -28,6 +39,9 @@ dev = [
 
 [tool.uv]
 package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["memos"]
 
 [build-system]
 requires = ["hatchling"]

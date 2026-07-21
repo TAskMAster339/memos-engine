@@ -23,9 +23,17 @@ uv tool install memos-engine
 Or clone and install from source:
 
 ```bash
-git clone https://github.com/taskmaster339/memos-engine.git
+git clone https://github.com/TAskMAster339/memos-engine.git
 cd memos-engine
 uv tool install -e .
+```
+
+Or install from PyPI (no clone needed):
+
+```bash
+pip install memos-engine
+# or via uv:
+uv tool install memos-engine
 ```
 
 **2. Index your project**
@@ -59,7 +67,7 @@ ready to use.
 
 ```bash
 # Clone and install globally
-git clone https://github.com/taskmaster339/memos-engine.git
+git clone https://github.com/TAskMAster339/memos-engine.git
 cd memos-engine
 uv tool install -e .
 
@@ -150,11 +158,18 @@ Uses `all-MiniLM-L6-v2` embeddings via fastembed (ONNX, no GPU required).
 The MCP server exposes the indexed codebase to AI agents. Install globally:
 
 ```bash
-uv tool install -e ~/memos-engine
+pip install memos-engine
 memos serve-mcp
 ```
 
-Or without global install:
+Or via uv:
+
+```bash
+uv tool install memos-engine
+memos serve-mcp
+```
+
+Or without global install (from source checkout):
 
 ```bash
 uv run memos serve-mcp

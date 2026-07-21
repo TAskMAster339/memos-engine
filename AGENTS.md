@@ -20,6 +20,11 @@ a short descriptive title and all details in the commit body.
 | `uv run memos serve-mcp --path .` | start MCP server (stdio) |
 | `uv run pytest tests/test_mcp.py` | MCP server tests |
 | `uv run pytest tests/test_llm_summary.py` | LLM summary tests |
+| `uv run pytest tests/test_impact.py` | Impact analysis tests |
+| `uv run pytest tests/test_hygiene.py` | Dead code / hygiene tests |
+| `uv run pytest tests/test_dependency_graph.py` | Dependency graph tests |
+| `uv run pytest tests/test_memory_hygiene.py` | Memory search & prune tests |
+| `uv run pytest tests/test_reindex.py` | Reindex tool tests |
 | `curl http://localhost:8000/symbols/{id}/context` | API: get context for symbol |
 | `uv add <pkg>` | add dependency |
 | `uv add --dev <pkg>` | add dev dependency |
@@ -35,6 +40,9 @@ memos/
     schema.sql      # human-readable DDL copy
     migrations/
       0001_init.sql # authoritative DDL
+      0002_vec.sql
+      0003_prompt_version.sql
+      0004_memory_fts.sql
   indexer/
     base.py         # LanguageIndexer ABC + ParsedSymbol/Call/Import/Result dataclasses
     typescript.py   # TypeScriptIndexer (tree-sitter, handles .ts + .tsx)
@@ -42,7 +50,9 @@ memos/
     diff.py         # compute_file_hash, should_reindex
   query/
     core.py         # find_symbol, find_calls, get_module, find_calls_by_id, semantic_search,
-                    # list_files, list_symbols, get_or_generate_summary, get_context
+                    # list_files, list_symbols, get_or_generate_summary, get_context,
+                    # get_rename_impact, get_diff_impact, find_unused_symbols, find_dead_imports,
+                    # get_dependency_graph, find_import_cycles, memory_search, memory_prune
                     # — pure query layer over db
   api/
     main.py         # FastAPI app — thin adapter over query/core.py
@@ -73,10 +83,16 @@ tests/
   test_mcp.py                 # 15 tests: MCP server tools
   test_semantic_search.py     # 8 tests: VecStore CRUD + semantic_search query
   test_llm_summary.py         # 11 tests: get_or_generate_summary, get_context, source_hash
+  test_impact.py              # 8 tests: rename_impact, diff_impact
+  test_hygiene.py             # 8 tests: unused symbols, dead imports
+  test_dependency_graph.py    # 8 tests: dependency graph + cycle detection
+  test_memory_hygiene.py      # 9 tests: memory search + prune
+  test_reindex.py             # 3 tests: reindex_file_tool
   test_migrations.py          # 2 tests: idempotent re-run
   fixtures/
     typescript_mini/src/    # 3 .ts files for integration testing
     go_mini/src/            # 3 .go files for integration testing
+    import_cycle/src/       # 2 .ts files with circular import
 ```
 
 ## Dependencies
@@ -112,7 +128,7 @@ tests/
 
 ## What does not exist yet
 
-- CI, linting, type checking, codegen — none configured
+- Type checking, codegen — none configured
 
 ## Execution order (from spec §6)
 
@@ -126,3 +142,9 @@ tests/
 8. ✅ MCP server
 9. ✅ `memory_entries` write-path via `memory_add_note`
 10. ✅ LLM enrichment: `get_or_generate_summary()` with content_hash check, `get_context()` composite function
+11. ✅ Section 0: Technical debt (dedup, batch resolve, SAVEPOINT, threading.Lock)
+12. ✅ Section 1: Impact analysis (rename_impact, diff_impact, MCP, API, tests)
+13. ✅ Section 2: Dead code / hygiene (unused symbols, dead imports, MCP, API, tests)
+14. ✅ Section 3: Dependency graph (graph + cycle detection, MCP, API, tests)
+15. ✅ Section 4: Memory search & hygiene (FTS5 search, prune, MCP, API, tests)
+16. ✅ Section 5: Reindex file tool (per-file reindex via MCP, tests)

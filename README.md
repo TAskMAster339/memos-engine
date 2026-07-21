@@ -73,7 +73,19 @@ Endpoints:
 |--------|------|-------------|
 | GET | `/symbols?name=greet&kind=function` | Find symbols by name |
 | GET | `/symbols/{id}/calls?direction=callers\|callees` | Find callers/callees of a symbol |
+| GET | `/symbols/{id}/context` | Full context (symbol + callers + callees + memories + summary) |
+| GET | `/symbols/{id}/rename-impact` | Analyse rename blast radius |
 | GET | `/modules/{path}` | Show everything for a file |
+| GET | `/modules/{path}/diff-impact` | Analyse diff blast radius for exported symbols |
+| GET | `/unused-symbols` | Find private functions never called |
+| GET | `/dead-imports` | Find unresolved imports |
+| GET | `/dependency-graph` | File-level dependency graph |
+| GET | `/import-cycles` | Find import cycles |
+| POST | `/search/semantic` | Semantic search by natural language |
+| POST | `/memories` | Add memory entry |
+| GET | `/memories` | List memory entries |
+| GET | `/memories/search?query=...` | Full-text search over memory entries |
+| POST | `/memories/prune` | Delete stale memory entries (dry-run by default) |
 
 All endpoints return JSON. Set `MEMOS_PROJECT_PATH` (defaults to `.`).
 
@@ -124,12 +136,22 @@ Available tools:
 | `find_symbol_tool` | Search symbols by name (+ kind, file filter) |
 | `find_calls_tool` | Find callers or callees of a symbol |
 | `get_module_tool` | Full file info (symbols, calls, imports) |
+| `get_context_tool` | Full context before editing (symbol + callers + callees + memories + summary) |
 | `semantic_search_tool` | Natural language search over code |
 | `list_files_tool` | List all indexed files |
 | `list_symbols_tool` | List all indexed symbols |
 | `list_projects_tool` | Current project info with stats |
 | `memory_add_note` | Add a note to episodic memory |
 | `get_memories` | Retrieve memory entries |
+| `rename_impact_tool` | Analyse what breaks if a symbol is renamed |
+| `diff_impact_tool` | Analyse blast radius for a file's exported symbols |
+| `find_unused_symbols_tool` | Find private functions never called |
+| `find_dead_imports_tool` | Find unresolved imports |
+| `get_dependency_graph_tool` | File-level dependency graph |
+| `find_import_cycles_tool` | Find import cycles |
+| `memory_search_tool` | Full-text search over memory entries |
+| `memory_prune_tool` | Delete stale memory entries (dry-run by default) |
+| `reindex_file_tool` | Re-index a single file after editing |
 
 Each query tool accepts an optional `project` parameter to target a specific opened project (defaults to the most recently opened one).
 

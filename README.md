@@ -10,7 +10,7 @@
 ![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=fff)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000)
 
-[![codecov](https://codecov.io/gh/TAskMAster339/memos-engine/branch/main/graph/badge.svg)](https://codecov.io/gh/TAskMAster339/memos-engine)
+[![codecov](https://codecov.io/gh/TAskMAster339/memos-engine/branch/main/graph/badge.svg?token=KPKMWDL1UF)](https://codecov.io/gh/TAskMAster339/memos-engine)
 
 </div>
 

@@ -3,13 +3,11 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  ci:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.12", "3.13"]
-        # TODO: verify tree-sitter/fastembed/sqlite-vec have wheels for 3.13
-        # If not, document limitation in README and keep only 3.12
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -20,29 +18,32 @@ jobs:
       - run: |
           uv run pytest \
             --cov=memos \
-            --cov-report=xml:coverage.xml \
-            --junitxml=junit.xml \
+            --cov-report=xml:coverage-${{ matrix.python-version }}.xml \
+            --junitxml=junit-${{ matrix.python-version }}.xml \
             --cov-fail-under=70 \
             -m "not slow"
-      - name: Check coverage
-        run: ls -lh coverage.xml
-      - name: Upload coverage reports to Codecov
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: |
+            coverage-${{ matrix.python-version }}.xml
+            junit-${{ matrix.python-version }}.xml
+
+  upload-coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./coverage-reports
+      - name: Upload merged coverage
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          report_type: coverage
-          flags: python-${{ matrix.python-version }}
-          fail_ci_if_error: true
-          verbose: true
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./junit.xml
-          report_type: test_results
-          flags: python-${{ matrix.python-version }}-tests
+          files: ./coverage-reports/**/coverage-*.xml
           fail_ci_if_error: true
 
   packaging-smoke-test:

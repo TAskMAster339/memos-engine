@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — 2026-07-22
+
+- JavaScript (.js/.jsx) support: `require()` → import (not call), `module.exports` ignored
+- Packaging hardening: CI smoke-test, migration presence test, Python 3.12+3.13 matrix
+- Performance: batch embedding (single model, chunked by 256, rich Progress bar)
+- Benchmarks: `--profile` flag, `scripts/benchmark_index.py`, query-efficiency regression test
+- Migration 0005: composite index `symbols(name, file_id)` for faster resolve
+- Fixed N+1 in `resolve_call_edges` (batch SELECT vs per-edge loop)
+- Adoption tooling: `memos doctor`, `memos watch`, `usage_stats_tool`
+- Diagnostics: `memos doctor` checks index freshness, schema, embeddings, unresolved edges
+- MCP: `_tracked` decorator counts per-session tool usage via `usage_stats_tool`
+- File watching: `memos watch` auto-reindexes on file changes (watchdog, 500ms debounce)
+
 ## 0.2.0 — 2026-07-21
 
 - Python language support (indexer, tests, fixtures)

@@ -1,3 +1,4 @@
+import functools
 import json
 import threading
 from pathlib import Path
@@ -30,6 +31,23 @@ mcp = FastMCP("Memory OS")
 _projects: dict[str, tuple] = {}
 _active_project: str | None = None
 _lock = threading.Lock()
+
+_tool_call_counts: dict[str, int] = {}
+_stats_lock = threading.Lock()
+
+
+def _record_call(tool_name: str) -> None:
+    with _stats_lock:
+        _tool_call_counts[tool_name] = _tool_call_counts.get(tool_name, 0) + 1
+
+
+def _tracked(func):
+    @mcp.tool()
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        _record_call(func.__name__)
+        return func(*args, **kwargs)
+    return wrapper
 
 
 def _inject_conn(path, conn, project):
@@ -99,7 +117,7 @@ def _open_project(root_path: str):
     return conn, project
 
 
-@mcp.tool()
+@_tracked
 def open_project(path: str) -> str:
     """Open a project by path. Builds the index if none exists yet.
 
@@ -140,7 +158,7 @@ def open_project(path: str) -> str:
         return json.dumps({"error": f"failed to open project: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def find_symbol_tool(
     name: str,
     kind: str | None = None,
@@ -172,7 +190,7 @@ def find_symbol_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def find_calls_tool(
     symbol_name: str,
     direction: str = "callers",
@@ -207,7 +225,7 @@ def find_calls_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def get_module_tool(path: str, project: str | None = None) -> str:
     """Show everything known about a file.
 
@@ -228,7 +246,7 @@ def get_module_tool(path: str, project: str | None = None) -> str:
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def get_context_tool(
     symbol_id: int,
     project: str | None = None,
@@ -256,7 +274,7 @@ def get_context_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def rename_impact_tool(
     symbol_id: int,
     project: str | None = None,
@@ -283,7 +301,7 @@ def rename_impact_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def diff_impact_tool(
     path: str,
     project: str | None = None,
@@ -310,7 +328,7 @@ def diff_impact_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def get_dependency_graph_tool(
     project: str | None = None,
 ) -> str:
@@ -333,7 +351,7 @@ def get_dependency_graph_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def find_import_cycles_tool(
     project: str | None = None,
 ) -> str:
@@ -356,7 +374,7 @@ def find_import_cycles_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def find_unused_symbols_tool(
     project: str | None = None,
 ) -> str:
@@ -379,7 +397,7 @@ def find_unused_symbols_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def find_dead_imports_tool(
     project: str | None = None,
 ) -> str:
@@ -402,7 +420,7 @@ def find_dead_imports_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def semantic_search_tool(
     query: str,
     top_k: int = 10,
@@ -434,7 +452,7 @@ def semantic_search_tool(
         return json.dumps({"error": f"search failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def list_files_tool(
     path_filter: str | None = None,
     project: str | None = None,
@@ -457,7 +475,7 @@ def list_files_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def list_symbols_tool(
     file_path: str | None = None,
     kind: str | None = None,
@@ -488,7 +506,7 @@ def list_symbols_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def memory_add_note(  # noqa: PLR0913
     content: str,
     scope_type: str = "project",
@@ -531,7 +549,7 @@ def memory_add_note(  # noqa: PLR0913
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def get_memories(
     scope_type: str | None = None,
     scope_id: int | None = None,
@@ -560,7 +578,7 @@ def get_memories(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def reindex_file_tool(
     path: str,
     project: str | None = None,
@@ -635,7 +653,7 @@ def reindex_file_tool(
         return json.dumps({"error": f"reindex failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def memory_search_tool(
     query: str,
     top_k: int = 10,
@@ -659,7 +677,7 @@ def memory_search_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def memory_prune_tool(
     older_than_days: int | None = None,
     kind: str | None = None,
@@ -698,7 +716,7 @@ def memory_prune_tool(
         return json.dumps({"error": f"query failed: {e}"})
 
 
-@mcp.tool()
+@_tracked
 def list_projects_tool(project: str | None = None) -> str:
     """Show opened project info including stats.
 
@@ -732,3 +750,17 @@ def list_projects_tool(project: str | None = None) -> str:
         return json.dumps({"error": str(e)})
     except Exception as e:
         return json.dumps({"error": f"query failed: {e}"})
+
+
+@_tracked
+def usage_stats_tool() -> str:
+    """Show how many times each memos tool has been called this server session.
+
+    Useful for understanding whether the coding agent is actually using memos
+    tools instead of falling back to grep/cat.
+
+    This is a per-process counter (resets when the MCP server restarts),
+    not persisted to the database.
+    """
+    with _stats_lock:
+        return json.dumps(dict(_tool_call_counts), indent=2)

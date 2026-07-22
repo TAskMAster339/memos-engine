@@ -1,6 +1,6 @@
 [project]
 name = "memos-engine"
-version = "0.2.0"
+version = "0.3.0"
 description = "Memory OS for AI coding agents — structural code index with episodic memory"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,6 +24,7 @@ dependencies = [
     "rich>=15.0.0",
     "mcp[cli]>=1.28.1",
     "tree-sitter-python>=0.23.0",
+    "watchdog>=4.0.0",
 ]
 
 [project.urls]
@@ -40,6 +41,9 @@ dev = [
 
 [tool.uv]
 package = true
+
+[tool.pytest.ini_options]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["memos"]

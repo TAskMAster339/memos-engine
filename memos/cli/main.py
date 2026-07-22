@@ -18,6 +18,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from memos.cli.doctor import run_diagnostics
 from memos.core.db import (
     delete_file,
     get_connection,
@@ -419,6 +420,94 @@ def cmd_memory_list(args):
     print(json.dumps(results, indent=2, default=str))
 
 
+def cmd_doctor(args):
+    from rich.table import Table  # noqa: PLC0415
+
+    conn, project = _open_db(args)
+    root = str(Path(args.path).resolve())
+    results = run_diagnostics(conn, project, root)
+    conn.close()
+
+    console = Console()
+    table = Table(title="memos doctor")
+    table.add_column("Check")
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Detail")
+    icons = {
+        "ok": "[green]✅[/]",
+        "warn": "[yellow]⚠️[/]",
+        "error": "[red]❌[/]",
+    }
+    for r in results:
+        table.add_row(r.check, icons.get(r.status, r.status), r.detail)
+    console.print(table)
+
+
+def cmd_watch(args):  # noqa: C901
+    from watchdog.events import FileSystemEventHandler  # noqa: PLC0415
+    from watchdog.observers import Observer  # noqa: PLC0415
+
+    root = str(Path(args.path).resolve())
+    db_path = str(Path(root) / ".memos" / "memory.db")
+    if not Path(db_path).exists():
+        print("error: no index found — run 'memos index' first", file=sys.stderr)
+        sys.exit(1)
+
+    conn = get_connection(db_path)
+    run_migrations(conn)
+    project = get_project_by_root(conn, root)
+    if project is None:
+        print(f"error: no project found for {root}", file=sys.stderr)
+        sys.exit(1)
+
+    debounce_sec = 0.5
+
+    console = Console()
+    console.print(f"[cyan]Watching[/] {root} for changes...")
+
+    class _Handler(FileSystemEventHandler):
+        def __init__(self):
+            self.debounce: dict[str, float] = {}
+
+        def on_modified(self, event):
+            if event.is_directory:
+                return
+            rel_path = os.path.relpath(event.src_path, root)
+            ext = Path(event.src_path).suffix.lower()
+            if ext not in EXTENSION_INDEXERS:
+                return
+
+            now = time.time()
+            last = self.debounce.get(event.src_path, 0)
+            if now - last < debounce_sec:
+                return
+            self.debounce[event.src_path] = now
+
+            try:
+                indexer = EXTENSION_INDEXERS[ext]
+                changed = index_file(
+                    conn, project, event.src_path, rel_path, indexer,
+                    full=False, embed=False,
+                )
+                if changed:
+                    resolve_call_edges(conn, project.id)
+                    conn.commit()
+                    console.print(f"  [green]reindexed[/] {rel_path}")
+            except Exception as e:
+                console.print(f"  [red]error[/] {rel_path}: {e}")
+
+    handler = _Handler()
+    observer = Observer()
+    observer.schedule(handler, root, recursive=True)
+    observer.start()
+    try:
+        observer.join()
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+    conn.close()
+
+
 def cmd_tools(args):
 
     tools = asyncio.run(mcp.list_tools())
@@ -530,6 +619,14 @@ def main():  # noqa: PLR0915
 
     p_tools = sub.add_parser("tools", help="List available MCP tools")
     p_tools.set_defaults(func=cmd_tools)
+
+    p_doctor = sub.add_parser("doctor", help="Run project diagnostics")
+    p_doctor.add_argument("--path", default=".", help="Project root path")
+    p_doctor.set_defaults(func=cmd_doctor)
+
+    p_watch = sub.add_parser("watch", help="Watch files and auto-reindex on change")
+    p_watch.add_argument("--path", default=".", help="Project root path")
+    p_watch.set_defaults(func=cmd_watch)
 
     if "--version" in sys.argv:
         print(f"memos {version('memos-engine')}")

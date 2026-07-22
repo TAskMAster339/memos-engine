@@ -303,3 +303,15 @@ async def test_get_memories(mcp_conn):
     text = results[0][0].text
     assert '"content": "mem 1"' in text
     assert '"content": "mem 2"' in text
+
+
+@pytest.mark.anyio
+async def test_usage_stats_tracks_calls(mcp_conn):
+    _srv._tool_call_counts.clear()  # noqa: SLF001
+    await mcp.call_tool("find_symbol_tool", {"name": "main"})
+    await mcp.call_tool("list_files_tool", {})
+    results = await mcp.call_tool("usage_stats_tool", {})
+    text = results[0][0].text
+    assert '"find_symbol_tool": 1' in text
+    assert '"list_files_tool": 1' in text
+    assert '"usage_stats_tool": 1' in text

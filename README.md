@@ -8,14 +8,15 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=fff)
 ![TSX](https://img.shields.io/badge/TSX-3178C6?logo=react&logoColor=fff)
 ![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=fff)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000)
 
 </div>
 
 `memos` builds a **structural index** (symbols, call edges, imports) of a
-TypeScript / TSX / Go / Python codebase using tree-sitter and stores it in
-SQLite. It is the first layer of a larger *Memory OS* for AI coding agents
-— instead of grepping text, agents query **structure** (definitions,
-callers, callees).
+TypeScript / TSX / Go / Python / JavaScript codebase using tree-sitter and
+stores it in SQLite. It is the first layer of a larger *Memory OS* for AI
+coding agents — instead of grepping text, agents query **structure**
+(definitions, callers, callees).
 
 ## Integrating memos into your project
 
@@ -85,6 +86,12 @@ memos tools
 
 # Start the MCP server for AI agents
 memos serve-mcp
+
+# Run project diagnostics
+memos doctor --path /path/to/your/project
+
+# Watch files and auto-reindex
+memos watch --path /path/to/your/project
 ```
 
 Or using `uv run` without global install:
@@ -93,6 +100,8 @@ Or using `uv run` without global install:
 uv sync                            # install deps
 uv run memos index --path .        # index current project
 uv run memos index --path . --full # force reindex (ignore hashes)
+uv run memos index --path . --no-embed  # skip embeddings (faster)
+uv run memos index --path . --profile   # print phase timings
 ```
 
 ## Query
@@ -221,6 +230,7 @@ Available tools:
 | `memory_search_tool` | Full-text search over memory entries |
 | `memory_prune_tool` | Delete stale memory entries (dry-run by default) |
 | `reindex_file_tool` | Re-index a single file after editing |
+| `usage_stats_tool` | Show per-session tool call counters (resets on server restart) |
 
 Each query tool accepts an optional `project` parameter to target a specific opened project (defaults to the most recently opened one).
 
@@ -275,6 +285,7 @@ uv run pytest -v
 - The CLI (`memos index`) is a thin adapter over `indexer/` + `core/db.py` —
   no business logic.
 - Semantic search: sqlite-vec vec0 table, lazy-loaded fastembed model, cascade
-  cleanup on reindex (`--no-embed` flag to skip).
+  cleanup on reindex (`--no-embed` flag to skip). Embeddings computed in
+  batches of 256 with rich progress bar (`--profile` for phase timings).
 - MCP server (`memos serve-mcp`) is a thin FastMCP adapter over `query/core.py`
   — same pattern as the FastAPI adapter.

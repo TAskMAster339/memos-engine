@@ -97,7 +97,7 @@ call edges, imports) с episodic memory. Инструмент доступен �
 | `memory_prune_tool(older_than_days?, kind?, apply?)` | Удаление устаревших записей (dry-run по умолчанию) |
 | `reindex_file_tool(path)` | Переиндексировать один файл после правки |
 
-Индексируются файлы с расширениями `.ts`, `.tsx`, `.go`. Индекс лежит в
+Индексируются файлы с расширениями `.ts`, `.tsx`, `.go`, `.py`, `.js`, `.jsx`. Индекс лежит в
 `.memos/memory.db` в корне проекта и обновляется через `memos index --path .`
 (инкрементально, по content hash — быстро на повторных запусках). Для
 переиндексации одного файла после правки используй `reindex_file_tool(path)`
@@ -128,13 +128,20 @@ a short descriptive title and all details in the commit body.
 | `uv run memos query module <path>` | show everything for a file |
 | `uv run memos serve --path . --port 8000` | start FastAPI server |
 | `uv run memos serve-mcp --path .` | start MCP server (stdio) |
+| `uv run memos doctor --path .` | Run project diagnostics |
+| `uv run memos watch --path .` | Watch files and auto-reindex |
 | `uv run pytest tests/test_mcp.py` | MCP server tests |
 | `uv run pytest tests/test_llm_summary.py` | LLM summary tests |
 | `uv run pytest tests/test_impact.py` | Impact analysis tests |
 | `uv run pytest tests/test_hygiene.py` | Dead code / hygiene tests |
 | `uv run pytest tests/test_dependency_graph.py` | Dependency graph tests |
 | `uv run pytest tests/test_memory_hygiene.py` | Memory search & prune tests |
+| `uv run pytest tests/test_javascript_indexer.py` | JavaScript indexer tests |
+| `uv run pytest tests/test_query_efficiency.py` | Query N+1 regression guard |
+| `uv run pytest tests/test_packaging.py` | Packaging smoke tests |
 | `uv run pytest tests/test_reindex.py` | Reindex tool tests |
+| `uv run pytest tests/test_cli_doctor.py` | Doctor CLI tests |
+| `uv run pytest tests/test_watch.py` | Watch (slow) tests |
 | `curl http://localhost:8000/symbols/{id}/context` | API: get context for symbol |
 | `uv add <pkg>` | add dependency |
 | `uv add --dev <pkg>` | add dev dependency |
@@ -152,13 +159,16 @@ memos/
       0001_init.sql # authoritative DDL
       0002_vec.sql
       0003_prompt_version.sql
-      0004_memory_fts.sql
+       0004_memory_fts.sql
+       0005_symbol_name_file_index.sql
   indexer/
     base.py         # LanguageIndexer ABC + ParsedSymbol/Call/Import/Result dataclasses
-    typescript.py   # TypeScriptIndexer (tree-sitter, handles .ts + .tsx)
+    typescript.py   # TypeScriptIndexer (tree-sitter, handles .ts + .tsx + .js + .jsx via language_override)
     go.py           # GoIndexer (tree-sitter, export by name case)
     python.py       # PythonIndexer (tree-sitter, export by _ prefix)  # NEW
     diff.py         # compute_file_hash, should_reindex
+  scripts/
+    benchmark_index.py  # performance benchmark harness
   query/
     core.py         # find_symbol, find_calls, get_module, find_calls_by_id, semantic_search,
                     # list_files, list_symbols, get_or_generate_summary, get_context,
@@ -175,17 +185,23 @@ memos/
     embeddings.py   # FastEmbedEmbedding (all-MiniLM-L6-v2, 384-dim)
     sqlite_vec_store.py  # SqliteVecStore (sqlite-vec vec0 table)
   cli/
+    doctor.py       # run_diagnostics(), DiagnosticResult — pure functions for `memos doctor`
     main.py         # argparse: "memos [--version]"
-                    #          "memos index [--path .] [--full] [--no-embed]"
+                    #          "memos index [--path .] [--full] [--no-embed] [--profile]"
                     #          "memos query (symbol|calls|module)"
                     #          "memos serve [--path] [--port]"
                     #          "memos serve-mcp [--path]"
                     #          "memos tools"
+                    #          "memos doctor"
+                    #          "memos watch"
 tests/
   conftest.py       # fixture: in-memory sqlite with migrations applied
   test_schema.py    # table existence checks
   test_crud.py      # CRUD + cascade delete
-  test_migrations.py# idempotent re-run
+   test_migrations.py# idempotent re-run
+    test_javascript_indexer.py  # 11 unit tests on JS parsing
+    test_query_efficiency.py    # 1 query N+1 regression guard
+    test_packaging.py           # 1 packaging smoke test
    test_typescript_indexer.py  # 18 unit tests on TS parsing
    test_go_indexer.py          # 18 unit tests on Go parsing
    test_python_indexer.py      # 18 unit tests on Python parsing
@@ -208,6 +224,7 @@ tests/
     go_mini/src/            # 3 .go files for integration testing
     python_mini/src/        # 3 .py files for integration testing  # NEW
     import_cycle/src/       # 2 .ts files with circular import
+    javascript_mini/src/    # 2 .js files for integration testing
 ```
 
 ## Dependencies
@@ -220,9 +237,11 @@ tests/
 - **fastembed** — ONNX embeddings (all-MiniLM-L6-v2, 384-dim)
 - **sqlite-vec** — vector search extension for sqlite
 - **rich** — CLI progress bars
+- **watchdog** — file system watcher for `memos watch`
 - **pytest** (dev)
 - **httpx** (dev, for TestClient)
 - **pytest-anyio** (dev, for async MCP tests)
+- **ruff** (dev)
 - **hatchling** (build)
 
 ## Architecture conventions
@@ -265,3 +284,6 @@ tests/
 14. ✅ Section 3: Dependency graph (graph + cycle detection, MCP, API, tests)
 15. ✅ Section 4: Memory search & hygiene (FTS5 search, prune, MCP, API, tests)
 16. ✅ Section 5: Reindex file tool (per-file reindex via MCP, tests)
+17. ✅ Section 0 (Phase 3): Packaging hardening — CI smoke-test, migration test, Python 3.13 matrix, README fix
+18. ✅ Section 1 (Phase 3): JavaScript .js/.jsx support — require()→import, language_override, fixtures, tests
+19. ✅ Section 3 (Phase 3): Performance — batch embedding, profile flag, benchmark script, N+1 fix, migration 0005

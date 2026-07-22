@@ -38,13 +38,6 @@ cd memos-engine
 uv tool install -e .
 ```
 
-Or install from PyPI (no clone needed):
-
-```bash
-pip install memos-engine
-# or via uv:
-uv tool install memos-engine
-```
 
 **2. Index your project**
 

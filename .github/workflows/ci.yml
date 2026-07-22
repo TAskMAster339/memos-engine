@@ -7,7 +7,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13"]
+        # TODO: verify tree-sitter/fastembed/sqlite-vec have wheels for 3.13
+        # If not, document limitation in README and keep only 3.12
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -16,3 +18,24 @@ jobs:
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run pytest
+
+  packaging-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv build
+      - name: install from built wheel in isolated venv
+        run: |
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install dist/*.whl
+          /tmp/smoke-venv/bin/memos --help
+      - name: verify entry point works end-to-end
+        run: |
+          mkdir -p /tmp/smoke-project/src
+          echo 'def foo(): return 1' > /tmp/smoke-project/src/a.py
+          cd /tmp/smoke-project
+          /tmp/smoke-venv/bin/memos index --path .
+          /tmp/smoke-venv/bin/memos query symbol foo --path . | grep -q '"name": "foo"'

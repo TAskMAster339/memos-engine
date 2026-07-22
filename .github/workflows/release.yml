@@ -12,6 +12,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+      - name: verify tag matches pyproject version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PYPROJECT_VERSION=$(grep -Po '(?<=^version = ")[^"]+' pyproject.toml)
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "Tag $TAG_VERSION does not match pyproject.toml version $PYPROJECT_VERSION"
+            exit 1
+          fi
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run pytest
@@ -19,7 +27,13 @@ jobs:
       - run: uv publish
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+      - name: extract changelog for this version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$TAG_VERSION" \
+            '/^## / { if (found) exit; if (index($0, "## " ver) == 1) found=1; next } \
+             found { print }' CHANGELOG.md > /tmp/release_body.md
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: /tmp/release_body.md

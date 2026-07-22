@@ -6,7 +6,7 @@ __pycache__/
 # memos local index database
 .memos/
 
-MEMORY_OS_ARCHITECTURE.md
+TZ.md
 
 # C extensions
 *.so

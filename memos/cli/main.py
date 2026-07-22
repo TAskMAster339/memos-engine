@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -177,7 +178,10 @@ def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True)
         conn.execute("RELEASE SAVEPOINT index_file")
 
 
-def cmd_index(args):
+def cmd_index(args):  # noqa: PLR0915
+    profile = args.profile
+    t_start = time.perf_counter() if profile else None
+
     root = str(Path(args.path).resolve())
 
     memos_dir = Path(root) / ".memos"
@@ -239,6 +243,9 @@ def cmd_index(args):
                 progress.update(task, info=f"[red]{rel_path} error: {e}")
             progress.update(task, advance=1)
 
+    if profile:
+        t_after_parse = time.perf_counter()
+
     if args.full:
         conn.execute(
             "UPDATE files SET mtime = ? WHERE project_id = ?",
@@ -257,6 +264,19 @@ def cmd_index(args):
     resolved = resolve_call_edges(conn, project.id)
     conn.commit()
     conn.close()
+
+    if profile:
+        t_end = time.perf_counter()
+        db_size = Path(db_path).stat().st_size
+        parse_embed = t_after_parse - t_start
+        resolve_t = t_end - t_after_parse
+        print(
+            f"PROFILE parse_insert_embed={parse_embed:.2f}s"
+            f" resolve={resolve_t:.2f}s"
+            f" total={t_end - t_start:.2f}s"
+            f" db_size={db_size}",
+            file=sys.stderr,
+        )
 
     summary = f"Indexed [green]{indexed}[/] of {len(files)} files"
     if errors:
@@ -371,6 +391,11 @@ def main():  # noqa: PLR0915
         "--no-embed",
         action="store_true",
         help="Skip embedding generation",
+    )
+    p_index.add_argument(
+        "--profile",
+        action="store_true",
+        help="Print phase timing breakdown to stderr",
     )
     p_index.set_defaults(func=cmd_index)
 

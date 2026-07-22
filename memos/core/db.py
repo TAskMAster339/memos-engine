@@ -1,4 +1,5 @@
 import sqlite3
+from collections import defaultdict
 from pathlib import Path
 
 import sqlite_vec
@@ -207,21 +208,37 @@ def resolve_call_edges(conn: sqlite3.Connection, project_id: int) -> int:
         (project_id,),
     ).fetchall()
 
+    if not edges:
+        return 0
+
+    # Batch: single SELECT for all unique callee names
+    unique_names = {e["callee_name"] for e in edges}
+    placeholders = ",".join("?" for _ in unique_names)
+    rows = conn.execute(
+        f"""SELECT s.id, s.file_id, s.exported, s.name
+            FROM symbols s
+            JOIN files f ON f.id = s.file_id
+            WHERE s.name IN ({placeholders}) AND f.project_id = ?""",
+        [*unique_names, project_id],
+    ).fetchall()
+
+    name_to_symbols: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        name_to_symbols[r["name"]].append(r)
+
     updates: list[tuple[int, int]] = []
     for edge in edges:
-        matches = conn.execute(
-            """SELECT s.id, s.file_id, s.exported
-               FROM symbols s
-               JOIN files f ON f.id = s.file_id
-               WHERE s.name = ? AND f.project_id = ?
-               ORDER BY s.exported DESC,
-                        CASE WHEN s.file_id = ? THEN 0 ELSE 1 END,
-                        s.id""",
-            (edge["callee_name"], project_id, edge["caller_file_id"]),
-        ).fetchall()
-
-        if matches:
-            updates.append((matches[0]["id"], edge["id"]))
+        candidates = name_to_symbols.get(edge["callee_name"], [])
+        if candidates:
+            best = min(
+                candidates,
+                key=lambda s: (
+                    not s["exported"],
+                    0 if s["file_id"] == edge["caller_file_id"] else 1,
+                    s["id"],
+                ),
+            )
+            updates.append((best["id"], edge["id"]))
 
     if updates:
         conn.executemany(

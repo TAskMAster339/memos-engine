@@ -35,6 +35,7 @@ CREATE TABLE symbols (
 );
 CREATE INDEX idx_symbols_name ON symbols(name);
 CREATE INDEX idx_symbols_file ON symbols(file_id);
+CREATE INDEX idx_symbols_name_file ON symbols(name, file_id);
 
 CREATE TABLE call_edges (
   id INTEGER PRIMARY KEY,

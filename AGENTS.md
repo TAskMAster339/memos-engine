@@ -142,6 +142,7 @@ a short descriptive title and all details in the commit body.
 | `uv run pytest tests/test_reindex.py` | Reindex tool tests |
 | `uv run pytest tests/test_cli_doctor.py` | Doctor CLI tests |
 | `uv run pytest tests/test_watch.py` | Watch (slow) tests |
+| `uv run pytest --cov=memos --cov-report=term-missing -m "not slow"` | Tests with coverage report |
 | `curl http://localhost:8000/symbols/{id}/context` | API: get context for symbol |
 | `uv add <pkg>` | add dependency |
 | `uv add --dev <pkg>` | add dev dependency |

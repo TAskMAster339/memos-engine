@@ -36,6 +36,7 @@ dev = [
     "httpx2>=2.7.0",
     "pytest>=9.1.1",
     "pytest-anyio>=0.0.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.9.0",
 ]
 
@@ -44,6 +45,10 @@ package = true
 
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
+
+[tool.coverage.run]
+source = ["memos"]
+omit = ["memos/core/migrations/*", "*/__init__.py"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["memos"]

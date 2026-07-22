@@ -679,7 +679,7 @@ def find_dead_imports(
         imp = dict(r)
         path = imp["imported_path"]
         lang = imp["file_language"]
-        if lang == "typescript":
+        if lang in ("typescript", "tsx", "javascript", "jsx"):
             imp["likely_external"] = not path.startswith((".", "/"))
         elif lang == "go":
             imp["likely_external"] = "/" not in path

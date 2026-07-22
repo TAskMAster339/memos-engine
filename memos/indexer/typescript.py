@@ -16,13 +16,14 @@ _TSX_LANG = Language(tst.language_tsx())
 
 
 class TypeScriptIndexer(LanguageIndexer):
-    def __init__(self, *, tsx: bool = False):
+    def __init__(self, *, tsx: bool = False, language_override: str | None = None):
         self.parser = Parser()
         self.parser.language = _TSX_LANG if tsx else _TS_LANG
         self._tsx = tsx
+        self._language_override = language_override
 
     def language(self) -> str:
-        return "tsx" if self._tsx else "typescript"
+        return self._language_override or ("tsx" if self._tsx else "typescript")
 
     def parse(self, source: str, file_path: str) -> ParseResult:
         source_bytes = bytes(source, "utf-8")
@@ -31,7 +32,7 @@ class TypeScriptIndexer(LanguageIndexer):
         self._walk(tree.root_node, source_bytes, result)
         return result
 
-    def _walk(self, node, source, result, *, exported=False, scope=None):  # noqa: C901, PLR0911, PLR0912
+    def _walk(self, node, source, result, *, exported=False, scope=None):  # noqa: C901, PLR0911, PLR0912, PLR0915
         t = node.type
 
         if t == "export_statement":
@@ -121,6 +122,21 @@ class TypeScriptIndexer(LanguageIndexer):
             return
 
         if t == "call_expression":
+            func_node = node.children[0] if node.children else None
+            if (
+                func_node is not None
+                and func_node.type == "identifier"
+                and self._node_text(func_node, source) == "require"
+            ):
+                args_node = node.child_by_field_name("arguments")
+                if args_node is not None:
+                    string_args = [c for c in args_node.children if c.type == "string"]
+                    if len(string_args) == 1:
+                        raw = self._node_text(string_args[0], source)
+                        result.imports.append(
+                            ParsedImport(imported_path=raw.strip("'\"")),
+                        )
+                        return
             self._add_call(node, source, result, scope)
             for child in node.children:
                 self._walk(child, source, result, exported=exported, scope=scope)

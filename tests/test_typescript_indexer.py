@@ -181,3 +181,11 @@ export function Greeting(props: Props): JSX.Element {
     assert "Greeting" in names
     assert any(s.kind == "interface" for s in r.symbols)
     assert any(s.kind == "function" for s in r.symbols)
+
+
+def test_require_in_ts_is_import_not_call():
+    src = 'const fs = require("fs");\n'
+    r = TypeScriptIndexer().parse(src, "test.ts")
+    assert len(r.imports) == 1
+    assert r.imports[0].imported_path == "fs"
+    assert len(r.calls) == 0

@@ -13,6 +13,7 @@ from memos.query.core import find_calls, find_symbol, get_module
 TS_FIXTURE = Path(__file__).parent / "fixtures" / "typescript_mini"
 GO_FIXTURE = Path(__file__).parent / "fixtures" / "go_mini"
 PY_FIXTURE = Path(__file__).parent / "fixtures" / "python_mini"
+JS_FIXTURE = Path(__file__).parent / "fixtures" / "javascript_mini"
 
 
 def _index_fixture(conn, fixture_root):
@@ -131,6 +132,42 @@ class TestQueryIntegration:
         assert symbol_names == {"main"}
         assert len(mod["calls"]) == 1  # main calls greet
         assert len(mod["imports"]) == 1  # from .utils import greet
+
+        conn.close()
+
+    def test_query_js_symbol(self):
+        conn = get_connection(":memory:")
+        _index_fixture(conn, JS_FIXTURE)
+
+        results = find_symbol(conn, "greet")
+        assert len(results) == 1
+        assert results[0]["kind"] == "function"
+        assert results[0]["exported"] == 1
+        assert results[0]["file_path"] == "src/utils.js"
+
+        conn.close()
+
+    def test_query_js_calls(self):
+        conn = get_connection(":memory:")
+        _index_fixture(conn, JS_FIXTURE)
+
+        callers = find_calls(conn, "greet", direction="callers")
+        assert len(callers) == 1
+        assert callers[0]["caller_name"] == "main"
+        assert callers[0]["file"] == "src/index.js"
+
+        conn.close()
+
+    def test_query_js_module(self):
+        conn = get_connection(":memory:")
+        project = _index_fixture(conn, JS_FIXTURE)
+
+        mod = get_module(conn, "src/index.js", project.id)
+        assert mod["file"]["path"] == "src/index.js"
+        symbol_names = {s["name"] for s in mod["symbols"]}
+        assert symbol_names == {"main"}
+        assert len(mod["calls"]) == 1
+        assert len(mod["imports"]) == 1
 
         conn.close()
 

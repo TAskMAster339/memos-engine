@@ -49,6 +49,8 @@ from memos.search.sqlite_vec_store import SqliteVecStore
 EXTENSION_INDEXERS = {
     ".ts": TypeScriptIndexer(tsx=False),
     ".tsx": TypeScriptIndexer(tsx=True),
+    ".js": TypeScriptIndexer(tsx=False, language_override="javascript"),
+    ".jsx": TypeScriptIndexer(tsx=True, language_override="jsx"),
     ".go": GoIndexer(),
     ".py": PythonIndexer(),
 }

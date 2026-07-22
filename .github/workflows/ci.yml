@@ -17,13 +17,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv sync
       - run: uv run ruff check .
-      - run: uv run pytest --cov=memos --cov-report=xml --cov-fail-under=70 -m "not slow"
+      - run: uv run pytest --cov=memos --cov-report=xml --junitxml=junit.xml --cov-fail-under=70 -m "not slow"
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   packaging-smoke-test:
     runs-on: ubuntu-latest

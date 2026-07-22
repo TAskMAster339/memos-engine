@@ -30,7 +30,9 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
+          files: ./coverage.xml
+          report_type: coverage
+          flags: python-${{ matrix.python-version }}
           fail_ci_if_error: true
           verbose: true
       - name: Upload test results to Codecov
@@ -40,7 +42,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./junit.xml
           report_type: test_results
-          fail_ci_if_error: false
+          flags: python-${{ matrix.python-version }}-tests
+          fail_ci_if_error: true
 
   packaging-smoke-test:
     runs-on: ubuntu-latest

@@ -84,7 +84,17 @@ def find_files(root: str) -> list[tuple[str, str]]:
     return sorted(files)
 
 
-def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True):  # noqa: PLR0913, PLR0912, C901
+def index_file(  # noqa: PLR0913, PLR0912, PLR0915, C901
+    conn,
+    project,
+    full_path,
+    rel_path,
+    indexer,
+    full,
+    *,
+    embed=True,
+    embed_tasks=None,
+):
     current_hash = compute_file_hash(full_path)
     existing = get_file_by_path(conn, project.id, rel_path)
 
@@ -144,13 +154,16 @@ def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True)
                         (parent_id, sym.id),
                     )
 
-        if embed and embed_ids:
-            from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+        if embed_ids:
+            if embed_tasks is not None:
+                embed_tasks.append((list(embed_ids), list(embed_texts)))
+            else:
+                from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
 
-            embedder = FastEmbedEmbedding()
-            vecs = embedder.embed(embed_texts)
-            store = SqliteVecStore(conn)
-            store.add_batch(embed_ids, vecs)
+                embedder = FastEmbedEmbedding()
+                vecs = embedder.embed(embed_texts)
+                store = SqliteVecStore(conn)
+                store.add_batch(embed_ids, vecs)
 
         for pc in parse_result.calls:
             caller_id = name_to_id.get(pc.caller_name) if pc.caller_name else None
@@ -178,7 +191,7 @@ def index_file(conn, project, full_path, rel_path, indexer, full, *, embed=True)
         conn.execute("RELEASE SAVEPOINT index_file")
 
 
-def cmd_index(args):  # noqa: PLR0915
+def cmd_index(args):  # noqa: C901, PLR0912, PLR0915
     profile = args.profile
     t_start = time.perf_counter() if profile else None
 
@@ -194,10 +207,12 @@ def cmd_index(args):  # noqa: PLR0915
     project = get_or_create_project(conn, root)
     files = find_files(root)
 
-    console = Console()
     indexed = 0
     errors = 0
-    embed_label = "[bright_black]no-embed[/]" if args.no_embed else ""
+    do_embed = not args.no_embed
+    embed_tasks: list[tuple[list[int], list[str]]] = [] if do_embed else None
+
+    console = Console()
 
     progress = Progress(
         SpinnerColumn(spinner_name="dots"),
@@ -212,7 +227,7 @@ def cmd_index(args):  # noqa: PLR0915
 
     with progress:
         task = progress.add_task(
-            f"[cyan]Indexing[/] {embed_label}",
+            "[cyan]Indexing[/]",
             total=len(files),
             info="",
         )
@@ -232,7 +247,8 @@ def cmd_index(args):  # noqa: PLR0915
                     rel_path,
                     indexer,
                     args.full,
-                    embed=not args.no_embed,
+                    embed=do_embed,
+                    embed_tasks=embed_tasks,
                 ):
                     indexed += 1
                     progress.update(task, info=f"[green]{rel_path}")
@@ -254,6 +270,43 @@ def cmd_index(args):  # noqa: PLR0915
 
     conn.commit()
 
+    # Batch embedding: one model instance, chunked with progress
+    if embed_tasks and do_embed:
+        from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+        from memos.search.sqlite_vec_store import SqliteVecStore  # noqa: PLC0415
+
+        all_ids: list[int] = []
+        all_texts: list[str] = []
+        for eids, etxts in embed_tasks:
+            all_ids.extend(eids)
+            all_texts.extend(etxts)
+
+        chunk = 256
+        embedder = FastEmbedEmbedding()
+        store = SqliteVecStore(conn)
+        embed_progress = Progress(
+            TextColumn("[bold]Embedding[/]"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=False,
+        )
+        with embed_progress:
+            etask = embed_progress.add_task(
+                "[cyan]Embedding[/]",
+                total=len(all_ids),
+            )
+            for i in range(0, len(all_ids), chunk):
+                chunk_ids = all_ids[i : i + chunk]
+                chunk_texts = all_texts[i : i + chunk]
+                vecs = embedder.embed(chunk_texts)
+                store.add_batch(chunk_ids, vecs)
+                embed_progress.update(etask, advance=len(chunk_ids))
+
+    if profile:
+        t_after_embed = time.perf_counter()
+
     total = conn.execute(
         "SELECT COUNT(*) FROM call_edges ce "
         "JOIN symbols s ON s.id = ce.caller_symbol_id "
@@ -268,10 +321,12 @@ def cmd_index(args):  # noqa: PLR0915
     if profile:
         t_end = time.perf_counter()
         db_size = Path(db_path).stat().st_size
-        parse_embed = t_after_parse - t_start
-        resolve_t = t_end - t_after_parse
+        parse_insert = t_after_parse - t_start
+        embed_t = t_after_embed - t_after_parse
+        resolve_t = t_end - t_after_embed
         print(
-            f"PROFILE parse_insert_embed={parse_embed:.2f}s"
+            f"PROFILE parse_insert={parse_insert:.2f}s"
+            f" embed={embed_t:.2f}s"
             f" resolve={resolve_t:.2f}s"
             f" total={t_end - t_start:.2f}s"
             f" db_size={db_size}",

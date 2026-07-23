@@ -1,3 +1,5 @@
+import posixpath
+import re
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
@@ -5,6 +7,11 @@ from pathlib import Path
 import sqlite_vec
 
 from memos.core.models import CallEdge, File, Import, MemoryEntry, Project, Symbol
+from memos.query.import_resolver import (
+    resolve_go_import,
+    resolve_python_import,
+    resolve_ts_import,
+)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -249,7 +256,111 @@ def resolve_call_edges(conn: sqlite3.Connection, project_id: int) -> int:
     return len(updates)
 
 
-# ── Import ───────────────────────────────────────────────────────────────────
+# ── Import resolution ─────────────────────────────────────────────────────────
+
+
+def _parse_go_mod(root_path: str) -> str | None:
+    """Extract module name from go.mod at project root, or None."""
+    go_mod = Path(root_path) / "go.mod"
+    if not go_mod.exists():
+        return None
+    try:
+        first_line = go_mod.read_text(encoding="utf-8").split("\n", 1)[0]
+        m = re.match(r"^module\s+(\S+)", first_line)
+        return m.group(1) if m else None
+    except OSError:
+        return None
+
+
+def resolve_imports(conn: sqlite3.Connection, project_id: int) -> int:
+    """Resolve imports.resolved_file_id for all unresolved imports in a project.
+
+    Dispatches to language-specific resolvers in memos.query.import_resolver.
+
+    * TypeScript/TSX/JavaScript/JSX — relative imports resolved;
+      npm/alias paths left NULL.
+    * Python — relative imports (leading dots) resolved;
+      stdlib/external left NULL.
+    * Go — resolves in-module imports via go.mod module prefix;
+      stdlib/external left NULL.
+
+    Returns the number of imports updated in this call.
+    """
+    conn.execute(
+        """UPDATE imports SET resolved_file_id = NULL
+           WHERE resolved_file_id IS NOT NULL
+           AND resolved_file_id NOT IN (SELECT id FROM files)""",
+    )
+
+    project_row = conn.execute(
+        "SELECT root_path FROM projects WHERE id = ?",
+        (project_id,),
+    ).fetchone()
+    root_path = project_row["root_path"] if project_row else ""
+    module_prefix = _parse_go_mod(root_path)
+
+    file_rows = conn.execute(
+        "SELECT id, path, language FROM files WHERE project_id = ?",
+        (project_id,),
+    ).fetchall()
+    path_to_id: dict[str, int] = {}
+    dir_to_go_paths: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for r in file_rows:
+        path_to_id[r["path"]] = r["id"]
+        if r["language"] == "go":
+            dir_to_go_paths[posixpath.dirname(r["path"])].append(
+                (r["path"], r["id"]),
+            )
+
+    rows = conn.execute(
+        """SELECT i.id AS import_id, i.imported_path,
+                  f.path AS src_path, f.language AS language
+           FROM imports i
+           JOIN files f ON f.id = i.file_id
+           WHERE f.project_id = ? AND i.resolved_file_id IS NULL
+           ORDER BY f.path, i.imported_path""",
+        (project_id,),
+    ).fetchall()
+
+    if not rows:
+        return 0
+
+    updates: list[tuple[int, int]] = []
+
+    for row in rows:
+        import_id = row["import_id"]
+        imported_path: str = row["imported_path"]
+        src_path: str = row["src_path"]
+        language: str = row["language"]
+
+        resolved_id = None
+
+        if language in ("typescript", "tsx", "javascript", "jsx"):
+            resolved_id = resolve_ts_import(
+                imported_path, src_path, path_to_id,
+            )
+        elif language == "python":
+            resolved_id = resolve_python_import(
+                imported_path, src_path, path_to_id,
+            )
+        elif language == "go":
+            resolved_id = resolve_go_import(
+                imported_path, src_path, path_to_id, dir_to_go_paths, module_prefix,
+            )
+
+        if resolved_id is not None:
+            updates.append((resolved_id, import_id))
+
+    if updates:
+        conn.executemany(
+            "UPDATE imports SET resolved_file_id = ? WHERE id = ?",
+            updates,
+        )
+
+    return len(updates)
+
+
+# ── Import CRUD ──────────────────────────────────────────────────────────────
 
 
 def insert_import(conn: sqlite3.Connection, imp: Import) -> Import:

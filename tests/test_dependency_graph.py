@@ -1,9 +1,17 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
+from memos.cli.main import (
+    EXTENSION_INDEXERS,
+    find_files,
+    get_or_create_project,
+    index_file,
+)
 from memos.core.db import (
     insert_file,
     insert_import,
     insert_project,
+    resolve_imports,
 )
 from memos.core.models import File, Import, Project
 from memos.query.core import (
@@ -214,3 +222,32 @@ class TestFindImportCycles:
         cycles = find_import_cycles(conn, project.id)
         assert len(cycles) == 1
         assert cycles[0] == ["src/a.ts"]
+
+
+def test_cycle_via_real_resolver(conn):
+    """Integration: real resolve_imports detects cycle without manual IDs."""
+    fixture = Path(__file__).parent / "fixtures" / "import_cycle"
+
+    root = str(fixture)
+    project = get_or_create_project(conn, root)
+
+    for full, rel in find_files(root):
+        ext = Path(full).suffix.lower()
+        indexer = EXTENSION_INDEXERS.get(ext)
+        if indexer is None:
+            continue
+        index_file(conn, project, full, rel, indexer, full=True)
+
+    resolved = resolve_imports(conn, project.id)
+    conn.commit()
+
+    assert resolved >= 1, "at least one import should resolve"
+
+    graph = get_dependency_graph(conn, project.id)
+    edges = graph["edges"]
+    assert len(edges) >= 1, "dependency graph should have edges after resolve"
+
+    cycles = find_import_cycles(conn, project.id)
+    assert len(cycles) >= 1, "import_cycle fixture should produce a cycle"
+    for cycle in cycles:
+        assert all("src/" in p for p in cycle)

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — 2026-07-23
+
+- Import resolution (`resolve_imports`): resolves `imports.resolved_file_id` for TS/JS/Python relative imports
+- Language-specific resolvers extracted to `memos/query/import_resolver.py`
+- `find_dead_imports` now distinguishes `broken` relative imports vs truly external packages
+- Integration: `resolve_imports` called from `memos index`, MCP `open_project`, MCP `reindex_file_tool`, and `memos watch`
+- Tests: `test_import_resolver.py` (8 unit tests), `test_import_resolution_efficiency.py` (N+1 guard), integration test in `test_dependency_graph.py`
+- `get_dependency_graph` and `find_import_cycles` now work on real data without manual ID propping
+
 ## 0.3.0 — 2026-07-22
 
 - JavaScript (.js/.jsx) support: `require()` → import (not call), `module.exports` ignored

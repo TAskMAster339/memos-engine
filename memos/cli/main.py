@@ -31,6 +31,7 @@ from memos.core.db import (
     insert_symbol,
     remove_vec_for_file,
     resolve_call_edges,
+    resolve_imports,
     run_migrations,
 )
 from memos.core.models import CallEdge, File, Import, Project, Symbol
@@ -316,6 +317,7 @@ def cmd_index(args):  # noqa: C901, PLR0912, PLR0915
         (project.id,),
     ).fetchone()[0]
     resolved = resolve_call_edges(conn, project.id)
+    imports_resolved = resolve_imports(conn, project.id)
     conn.commit()
     conn.close()
 
@@ -339,6 +341,8 @@ def cmd_index(args):  # noqa: C901, PLR0912, PLR0915
         summary += f", [red]{errors} error(s)[/]"
     if total:
         summary += f" | resolved [cyan]{resolved}[/] of {total} call edges"
+    if imports_resolved:
+        summary += f" | imports [cyan]{imports_resolved}[/] resolved"
     console.print(summary)
 
 
@@ -491,6 +495,7 @@ def cmd_watch(args):  # noqa: C901
                 )
                 if changed:
                     resolve_call_edges(conn, project.id)
+                    resolve_imports(conn, project.id)
                     conn.commit()
                     console.print(f"  [green]reindexed[/] {rel_path}")
             except Exception as e:

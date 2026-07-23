@@ -140,6 +140,8 @@ a short descriptive title and all details in the commit body.
 | `uv run pytest tests/test_query_efficiency.py` | Query N+1 regression guard |
 | `uv run pytest tests/test_packaging.py` | Packaging smoke tests |
 | `uv run pytest tests/test_reindex.py` | Reindex tool tests |
+| `uv run pytest tests/test_import_resolver.py` | Import resolver tests |
+| `uv run pytest tests/test_import_resolution_efficiency.py` | Import N+1 regression guard |
 | `uv run pytest tests/test_cli_doctor.py` | Doctor CLI tests |
 | `uv run pytest tests/test_watch.py` | Watch (slow) tests |
 | `uv run pytest --cov=memos --cov-report=term-missing -m "not slow"` | Tests with coverage report |
@@ -176,6 +178,7 @@ memos/
                     # get_rename_impact, get_diff_impact, find_unused_symbols, find_dead_imports,
                     # get_dependency_graph, find_import_cycles, memory_search, memory_prune
                     # — pure query layer over db
+    import_resolver.py  # resolve_ts_import, resolve_python_import — language-specific resolvers
   api/
     main.py         # FastAPI app — thin adapter over query/core.py
     schemas.py      # pydantic response models for API
@@ -261,7 +264,8 @@ tests/
 - Python export: determined by `name[0] != '_'` — convention-based, like Go
 - Go methods: `method_declaration` nodes are separate from type declarations; receiver type is extracted from `receiver` field
 - Go imports: both single `import "x"` and grouped `import ( "x" "y" )` forms are handled via `import_spec` / `import_spec_list`
-- Python imports: `import_statement` (single/as) and `import_from_statement` (from/relative) — no resolver yet
+- Python imports: `import_statement` (single/as) and `import_from_statement` (from/relative) — resolved via `memos/query/import_resolver.py`
+- Go imports: **not resolved** — `resolve_imports` in `core/db.py` skips Go files. Reason: no access to `go.mod` module name to strip import prefix; only full import paths (e.g. `github.com/foo/bar`) are stored, which require module-relative heuristics. This is a known limitation.
 
 ## What does not exist yet
 
@@ -288,3 +292,4 @@ tests/
 17. ✅ Section 0 (Phase 3): Packaging hardening — CI smoke-test, migration test, Python 3.13 matrix, README fix
 18. ✅ Section 1 (Phase 3): JavaScript .js/.jsx support — require()→import, language_override, fixtures, tests
 19. ✅ Section 3 (Phase 3): Performance — batch embedding, profile flag, benchmark script, N+1 fix, migration 0005
+20. ✅ Section 6: Import resolution — `resolve_imports` in `core/db.py`, language-specific resolvers in `query/import_resolver.py`, integration in CLI/MCP, `find_dead_imports` `broken` flag, efficiency regression guard

@@ -108,9 +108,10 @@ def _open_project(root_path: str):
                 full=True,
                 embed=True,
             )
-        from memos.core.db import resolve_call_edges  # noqa: PLC0415
+        from memos.core.db import resolve_call_edges, resolve_imports  # noqa: PLC0415
 
         resolve_call_edges(conn, project.id)
+        resolve_imports(conn, project.id)
         conn.commit()
 
     _projects[resolved] = (conn, project)
@@ -594,7 +595,7 @@ def reindex_file_tool(
             Defaults to the most recently opened project.
     """
     from memos.cli.main import EXTENSION_INDEXERS, index_file  # noqa: PLC0415
-    from memos.core.db import resolve_call_edges  # noqa: PLC0415
+    from memos.core.db import resolve_call_edges, resolve_imports  # noqa: PLC0415
 
     try:
         conn, proj = _ensure_project(project)
@@ -632,6 +633,7 @@ def reindex_file_tool(
             ).fetchone()[0]
             if unresolved > 0:
                 resolve_call_edges(conn, proj.id)
+            resolve_imports(conn, proj.id)
 
         conn.commit()
 

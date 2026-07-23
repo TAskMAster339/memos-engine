@@ -325,13 +325,13 @@ def test_index_go_project():
             index_file(conn, project, full, rel, indexer, full=True)
 
     symbol_count = conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
-    assert symbol_count == 7
+    assert symbol_count == 8
 
     call_count = conn.execute("SELECT COUNT(*) FROM call_edges").fetchone()[0]
     assert call_count >= 1
 
     import_count = conn.execute("SELECT COUNT(*) FROM imports").fetchone()[0]
-    assert import_count == 3
+    assert import_count == 4
 
     conn.close()
 

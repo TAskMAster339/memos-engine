@@ -1,3 +1,4 @@
+import json
 import posixpath
 import re
 import sqlite3
@@ -272,15 +273,45 @@ def _parse_go_mod(root_path: str) -> str | None:
         return None
 
 
+def _parse_tsconfig(root_path: str) -> tuple[str | None, dict[str, list[str]] | None]:
+    """Extract baseUrl and paths from tsconfig.json or jsconfig.json at project root.
+
+    Returns (base_url, paths_dict) or (None, None) if no config found or
+    config is unreadable. Returns paths only if it's a non-empty dict.
+    """
+    for fname in ("tsconfig.json", "jsconfig.json"):
+        config_path = Path(root_path) / fname
+        if config_path.exists():
+            try:
+                data = json.loads(config_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            compiler_options = data.get("compilerOptions") or {}
+            base_url = compiler_options.get("baseUrl")
+            base_url = str(base_url) if base_url else None
+            raw_paths = compiler_options.get("paths")
+            paths: dict[str, list[str]] | None = None
+            if isinstance(raw_paths, dict) and raw_paths:
+                paths = {}
+                for k, v in raw_paths.items():
+                    if isinstance(v, list) and v:
+                        paths[k] = [str(item) for item in v]
+                if not paths:
+                    paths = None
+            return base_url, paths
+    return None, None
+
+
 def resolve_imports(conn: sqlite3.Connection, project_id: int) -> int:
     """Resolve imports.resolved_file_id for all unresolved imports in a project.
 
     Dispatches to language-specific resolvers in memos.query.import_resolver.
 
     * TypeScript/TSX/JavaScript/JSX — relative imports resolved;
-      npm/alias paths left NULL.
-    * Python — relative imports (leading dots) resolved;
-      stdlib/external left NULL.
+      non-relative paths resolved via tsconfig baseUrl and paths aliases
+      if a tsconfig.json or jsconfig.json exists at the project root.
+    * Python — relative imports (leading dots) and absolute intra-package
+      imports resolved; stdlib/external left NULL.
     * Go — resolves in-module imports via go.mod module prefix;
       stdlib/external left NULL.
 
@@ -298,6 +329,7 @@ def resolve_imports(conn: sqlite3.Connection, project_id: int) -> int:
     ).fetchone()
     root_path = project_row["root_path"] if project_row else ""
     module_prefix = _parse_go_mod(root_path)
+    ts_base_url, ts_paths = _parse_tsconfig(root_path)
 
     file_rows = conn.execute(
         "SELECT id, path, language FROM files WHERE project_id = ?",
@@ -338,6 +370,7 @@ def resolve_imports(conn: sqlite3.Connection, project_id: int) -> int:
         if language in ("typescript", "tsx", "javascript", "jsx"):
             resolved_id = resolve_ts_import(
                 imported_path, src_path, path_to_id,
+                base_url=ts_base_url, paths=ts_paths,
             )
         elif language == "python":
             resolved_id = resolve_python_import(

@@ -18,29 +18,80 @@ _PY_CANDIDATES = (
 )
 
 
-def resolve_ts_import(
-    imported_path: str,
-    src_path: str,
-    path_to_id: dict[str, int],
-) -> int | None:
-    """Resolve a TypeScript/JavaScript/JSX/TSX import path.
-
-    Only resolves relative imports (./ or ../). Non-relative paths
-    (npm packages, aliases) return None.
-
-    Candidates: path, +.ts, +.tsx, +.js, +.jsx, +/index.ts, +/index.tsx,
-    +/index.js, +/index.jsx
-    """
-    if not imported_path.startswith(("./", "../")):
-        return None
-
-    src_dir = posixpath.dirname(src_path)
-    base = posixpath.normpath(posixpath.join(src_dir, imported_path))
+def _try_ts_candidates(base: str, path_to_id: dict[str, int]) -> int | None:
+    """Try all TS/JS candidate suffixes for a base path."""
     for suffix in _TS_CANDIDATES:
         candidate = base + suffix
         fid = path_to_id.get(candidate)
         if fid is not None:
             return fid
+    return None
+
+
+def resolve_ts_import(
+    imported_path: str,
+    src_path: str,
+    path_to_id: dict[str, int],
+    base_url: str | None = None,
+    paths: dict[str, list[str]] | None = None,
+) -> int | None:
+    """Resolve a TypeScript/JavaScript/JSX/TSX import path.
+
+    * Relative imports (./ or ../) — resolved relative to source file.
+    * Non-relative imports — first tries tsconfig paths aliases, then
+      baseUrl resolution. Falls back to None (npm/external).
+
+    Arguments:
+        base_url: value of compilerOptions.baseUrl from tsconfig (or None)
+        paths: value of compilerOptions.paths from tsconfig (or None)
+
+    Candidates: path, +.ts, +.tsx, +.js, +.jsx, +/index.ts, +/index.tsx,
+    +/index.js, +/index.jsx
+    """
+    if imported_path.startswith(("./", "../")):
+        src_dir = posixpath.dirname(src_path)
+        base = posixpath.normpath(posixpath.join(src_dir, imported_path))
+        return _try_ts_candidates(base, path_to_id)
+
+    # Non-relative: try paths aliases first, then baseUrl
+    if paths:
+        for pattern, replacements in paths.items():
+            fid = _match_ts_paths_pattern(
+                imported_path, pattern, replacements, path_to_id,
+            )
+            if fid is not None:
+                return fid
+
+    if base_url is not None:
+        base = posixpath.normpath(posixpath.join(base_url, imported_path))
+        fid = _try_ts_candidates(base, path_to_id)
+        if fid is not None:
+            return fid
+
+    return None
+
+
+def _match_ts_paths_pattern(
+    imported_path: str,
+    pattern: str,
+    replacements: list[str],
+    path_to_id: dict[str, int],
+) -> int | None:
+    """Try a single tsconfig paths entry against an import path."""
+    if "*" in pattern:
+        prefix, suffix = pattern.split("*", 1)
+        if imported_path.startswith(prefix) and imported_path.endswith(suffix):
+            middle = imported_path[len(prefix):len(imported_path) - len(suffix)]
+            for replacement in replacements:
+                resolved = replacement.replace("*", middle)
+                fid = _try_ts_candidates(resolved, path_to_id)
+                if fid is not None:
+                    return fid
+    elif imported_path == pattern:
+        for replacement in replacements:
+            fid = _try_ts_candidates(replacement, path_to_id)
+            if fid is not None:
+                return fid
     return None
 
 

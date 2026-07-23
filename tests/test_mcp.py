@@ -6,12 +6,22 @@ from pathlib import Path
 import pytest
 
 import memos.mcp.server as _srv
+from memos.cli.main import (
+    EXTENSION_INDEXERS,
+    find_files,
+    get_or_create_project,
+    index_file,
+)
 from memos.core.db import (
+    get_connection,
     insert_call_edge,
     insert_file,
     insert_import,
     insert_project,
     insert_symbol,
+    resolve_call_edges,
+    resolve_imports,
+    run_migrations,
 )
 from memos.core.models import CallEdge, File, Import, Project, Symbol
 from memos.mcp.server import _inject_conn, _projects, mcp
@@ -321,7 +331,7 @@ async def test_diff_range_impact_tool(tmp_path: Path):
     src.mkdir()
     (src / "a.ts").write_text("export const greet = (): void => {};")
     (src / "b.ts").write_text(
-        "import { greet } from './a'; export const main = (): void => { greet(); };"
+        "import { greet } from './a'; export const main = (): void => { greet(); };",
     )
     _git(["git", "add", "-A"], root)
     _git(["git", "commit", "-m", "A"], root)
@@ -333,19 +343,6 @@ async def test_diff_range_impact_tool(tmp_path: Path):
     _git(["git", "commit", "-m", "B: mod a"], root)
 
     # index files into in-memory db
-    from memos.cli.main import (
-        EXTENSION_INDEXERS,
-        find_files,
-        get_or_create_project,
-        index_file,
-    )
-    from memos.core.db import (
-        get_connection,
-        resolve_call_edges,
-        resolve_imports,
-        run_migrations,
-    )
-
     conn = get_connection(":memory:")
     run_migrations(conn)
 
@@ -382,7 +379,11 @@ async def test_diff_range_impact_tool(tmp_path: Path):
 
 def _git(cmd, cwd):
     res = subprocess.run(
-        cmd, capture_output=True, text=True, cwd=cwd, check=False,
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        check=False,
     )
     assert res.returncode == 0, f"git {' '.join(cmd)} failed: {res.stderr}"
     return res.stdout.strip()

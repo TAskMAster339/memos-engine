@@ -6,7 +6,7 @@ import pytest
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from memos.cli.main import EXTENSION_INDEXERS
+from memos.cli.main import EXTENSION_INDEXERS, index_file
 from memos.core.db import (
     get_connection,
     get_file_by_path,
@@ -39,7 +39,6 @@ def test_watch_detects_file_change(tmp_path: Path):
     project = project.model_copy(update={"id": cur.lastrowid})
 
     indexer = EXTENSION_INDEXERS[".ts"]
-    from memos.cli.main import index_file
     index_file(
         conn, project, str(src_file), "src/a.ts", indexer,
         full=False, embed=False,

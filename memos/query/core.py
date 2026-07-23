@@ -150,8 +150,8 @@ def semantic_search(
     top_k: int = 10,
     project_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    from memos.search.embeddings import FastEmbedEmbedding
-    from memos.search.sqlite_vec_store import SqliteVecStore
+    from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+    from memos.search.sqlite_vec_store import SqliteVecStore  # noqa: PLC0415
 
     embedder = FastEmbedEmbedding()
     store = SqliteVecStore(conn)

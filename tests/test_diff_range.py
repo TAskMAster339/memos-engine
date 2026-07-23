@@ -1,6 +1,12 @@
 import subprocess
 from pathlib import Path
 
+from memos.cli.main import (
+    EXTENSION_INDEXERS,
+    find_changed_files,
+    get_or_create_project,
+    index_file,
+)
 from memos.core.db import (
     get_file_by_path,
     insert_call_edge,
@@ -8,6 +14,7 @@ from memos.core.db import (
     insert_import,
     insert_project,
     insert_symbol,
+    resolve_imports,
 )
 from memos.core.models import CallEdge, File, Import, Project, Symbol
 from memos.query.core import get_diff_range_impact
@@ -23,28 +30,42 @@ def _seed_two_files(conn):
     project = insert_project(conn, project)
 
     file_a = File(
-        project_id=project.id, path="src/a.ts",
-        language="typescript", content_hash="aaa",
+        project_id=project.id,
+        path="src/a.ts",
+        language="typescript",
+        content_hash="aaa",
     )
     file_a = insert_file(conn, file_a)
 
     file_b = File(
-        project_id=project.id, path="src/b.ts",
-        language="typescript", content_hash="bbb",
+        project_id=project.id,
+        path="src/b.ts",
+        language="typescript",
+        content_hash="bbb",
     )
     file_b = insert_file(conn, file_b)
 
     sym_greet = Symbol(
-        file_id=file_a.id, name="greet", kind="function",
+        file_id=file_a.id,
+        name="greet",
+        kind="function",
         signature="(name: string): string",
-        start_line=1, end_line=5, exported=True, content_hash="h1",
+        start_line=1,
+        end_line=5,
+        exported=True,
+        content_hash="h1",
     )
     sym_greet = insert_symbol(conn, sym_greet)
 
     sym_main = Symbol(
-        file_id=file_b.id, name="main", kind="function",
+        file_id=file_b.id,
+        name="main",
+        kind="function",
         signature="(): void",
-        start_line=1, end_line=10, exported=True, content_hash="h2",
+        start_line=1,
+        end_line=10,
+        exported=True,
+        content_hash="h2",
     )
     sym_main = insert_symbol(conn, sym_main)
 
@@ -71,7 +92,7 @@ class TestGetDiffRangeImpact:
     def test_aggregates_across_files(self, conn):
         _seed_two_files(conn)
         project = conn.execute(
-            "SELECT * FROM projects ORDER BY id DESC LIMIT 1"
+            "SELECT * FROM projects ORDER BY id DESC LIMIT 1",
         ).fetchone()
 
         result = get_diff_range_impact(conn, project["id"], ["src/a.ts"])
@@ -84,18 +105,20 @@ class TestGetDiffRangeImpact:
     def test_skips_nonexistent_file(self, conn):
         _seed_two_files(conn)
         project = conn.execute(
-            "SELECT * FROM projects ORDER BY id DESC LIMIT 1"
+            "SELECT * FROM projects ORDER BY id DESC LIMIT 1",
         ).fetchone()
 
         result = get_diff_range_impact(
-            conn, project["id"], ["src/a.ts", "src/missing.ts"],
+            conn,
+            project["id"],
+            ["src/a.ts", "src/missing.ts"],
         )
         assert len(result["files"]) == 1
 
     def test_empty_changed_list(self, conn):
         _seed_two_files(conn)
         project = conn.execute(
-            "SELECT * FROM projects ORDER BY id DESC LIMIT 1"
+            "SELECT * FROM projects ORDER BY id DESC LIMIT 1",
         ).fetchone()
 
         result = get_diff_range_impact(conn, project["id"], [])
@@ -137,14 +160,6 @@ class TestDiffRangeWithGit:
         self._git(["git", "commit", "-m", "B: mod a + add b"], repo)
 
         # manually index files into the in-memory conn
-        from memos.cli.main import (
-            EXTENSION_INDEXERS,
-            find_changed_files,
-            get_or_create_project,
-            index_file,
-        )
-        from memos.core.db import resolve_imports
-
         project = get_or_create_project(conn, root)
 
         for full, rel in find_changed_files(root, git_ref=ref_a)[0]:
@@ -159,7 +174,13 @@ class TestDiffRangeWithGit:
                 ext = Path(full_path).suffix.lower()
                 indexer = EXTENSION_INDEXERS[ext]
                 index_file(
-                    conn, project, full_path, rel, indexer, full=True, embed=False,
+                    conn,
+                    project,
+                    full_path,
+                    rel,
+                    indexer,
+                    full=True,
+                    embed=False,
                 )
 
         resolve_imports(conn, project.id)

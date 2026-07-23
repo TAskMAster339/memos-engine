@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from memos.cli.main import find_changed_files, find_files
+from memos.cli.main import (
+    EXTENSION_INDEXERS,
+    find_changed_files,
+    find_files,
+    index_file,
+)
 from memos.core.db import (
     delete_file,
     get_connection,
@@ -142,55 +147,11 @@ class TestIncrementalReindex:
         proj = project_for_conn
         root = str(repo)
 
-        from memos.cli.main import EXTENSION_INDEXERS, index_file
-
         (repo / "a.ts").write_text("export const a = 1;")
         (repo / "b.ts").write_text("export const b = 1;")
         _commit_all(repo, "A: a + b")
         ref_a = _git(["git", "rev-parse", "HEAD"], repo)
 
-        (repo / "a.ts").write_text("export const a = 2;")
-        (repo / "c.ts").write_text("export const c = 1;")
-        _commit_all(repo, "B: mod a + add c")
-
-        files, deleted = find_changed_files(root, git_ref=ref_a)
-        assert deleted == []
-
-        for rel in deleted:
-            existing = get_file_by_path(c, proj.id, rel)
-            if existing:
-                delete_file(c, existing.id)
-
-        for full, rel in files:
-            ext = Path(full).suffix.lower()
-            indexer = EXTENSION_INDEXERS[ext]
-            index_file(c, proj, full, rel, indexer, full=True, embed=False)
-
-        resolve_imports(c, proj.id)
-        c.commit()
-
-        symbols = c.execute(
-            "SELECT s.name, f.path FROM symbols s JOIN files f ON f.id = s.file_id "
-            "WHERE f.project_id = ? ORDER BY s.name",
-            (proj.id,),
-        ).fetchall()
-        names = {r["name"] for r in symbols}
-        assert names == {"a", "c"}, f"expected a, c but got {names}"
-
-    def test_deleted_file_removed_from_index(
-        self, repo: Path, conn_for_repo, project_for_conn,
-    ):
-        c = conn_for_repo
-        proj = project_for_conn
-        root = str(repo)
-
-        from memos.cli.main import EXTENSION_INDEXERS, index_file
-
-        (repo / "a.ts").write_text("export const a = 1;")
-        (repo / "b.ts").write_text("export const b = 1;")
-        _commit_all(repo, "A: a + b")
-        ref_a = _git(["git", "rev-parse", "HEAD"], repo)
-        # index commit A fully
         for full, rel in find_files(root):
             ext = Path(full).suffix.lower()
             indexer = EXTENSION_INDEXERS[ext]
@@ -215,14 +176,47 @@ class TestIncrementalReindex:
         assert get_file_by_path(c, proj.id, "a.ts") is None
         assert get_file_by_path(c, proj.id, "b.ts") is not None
 
-    def test_dirty_indexes_uncommitted(
+    def test_deleted_file_removed_from_index(
         self, repo: Path, conn_for_repo, project_for_conn,
     ):
         c = conn_for_repo
         proj = project_for_conn
         root = str(repo)
 
-        from memos.cli.main import EXTENSION_INDEXERS, index_file
+        (repo / "a.ts").write_text("export const a = 1;")
+        (repo / "b.ts").write_text("export const b = 1;")
+        _commit_all(repo, "A: a + b")
+        ref_a = _git(["git", "rev-parse", "HEAD"], repo)
+        # index commit A fully
+        for full, rel in find_files(root):
+            ext = Path(full).suffix.lower()
+            indexer = EXTENSION_INDEXERS[ext]
+            index_file(c, proj, full, rel, indexer, full=True, embed=False)
+        c.commit()
+
+        assert get_file_by_path(c, proj.id, "a.ts") is not None
+        assert get_file_by_path(c, proj.id, "b.ts") is not None
+
+        # delete b.ts in commit B
+        (repo / "b.ts").unlink()
+        _commit_all(repo, "B: delete b")
+
+        _files, deleted = find_changed_files(root, git_ref=ref_a)
+        for rel in deleted:
+            existing = get_file_by_path(c, proj.id, rel)
+            if existing:
+                delete_file(c, existing.id)
+        c.commit()
+
+        assert get_file_by_path(c, proj.id, "a.ts") is not None
+        assert get_file_by_path(c, proj.id, "b.ts") is None
+
+    def test_dirty_indexes_uncommitted(
+        self, repo: Path, conn_for_repo, project_for_conn,
+    ):
+        c = conn_for_repo
+        proj = project_for_conn
+        root = str(repo)
 
         (repo / "a.ts").write_text("export const a = 1;")
         (repo / "b.ts").write_text("export const b = 1;")

@@ -5,7 +5,14 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from memos.core.db import get_connection, get_project_by_root, run_migrations
+from memos.core.db import (
+    get_connection,
+    get_file_by_path,
+    get_project_by_root,
+    resolve_call_edges,
+    resolve_imports,
+    run_migrations,
+)
 from memos.query.core import (
     add_memory_entry,
     find_calls,
@@ -86,7 +93,7 @@ def _open_project(root_path: str):
 
     project = get_project_by_root(conn, resolved)
     if project is None:
-        from memos.cli.main import (
+        from memos.cli.main import (  # noqa: PLC0415
             EXTENSION_INDEXERS,
             find_files,
             get_or_create_project,
@@ -109,7 +116,6 @@ def _open_project(root_path: str):
                 full=True,
                 embed=True,
             )
-        from memos.core.db import resolve_call_edges, resolve_imports
 
         resolve_call_edges(conn, project.id)
         resolve_imports(conn, project.id)
@@ -347,8 +353,7 @@ def diff_range_impact_tool(
     """
     try:
         conn, proj = _ensure_project(project)
-        from memos.cli.main import find_changed_files
-        from memos.core.db import get_file_by_path
+        from memos.cli.main import find_changed_files  # noqa: PLC0415
 
         changed_files, _deleted = find_changed_files(
             proj.root_path, git_ref=since,
@@ -631,8 +636,7 @@ def reindex_file_tool(
         project: Project root path (must have been opened via open_project).
             Defaults to the most recently opened project.
     """
-    from memos.cli.main import EXTENSION_INDEXERS, index_file
-    from memos.core.db import resolve_call_edges, resolve_imports
+    from memos.cli.main import EXTENSION_INDEXERS, index_file  # noqa: PLC0415
 
     try:
         conn, proj = _ensure_project(project)

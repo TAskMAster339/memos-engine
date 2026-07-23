@@ -18,6 +18,9 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
+from rich.table import Table
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from memos.cli.doctor import run_diagnostics
 from memos.core.db import (
@@ -49,6 +52,7 @@ from memos.query.core import (
     get_memory_entries,
     get_module,
 )
+from memos.search.embeddings import FastEmbedEmbedding
 from memos.search.sqlite_vec_store import SqliteVecStore
 
 EXTENSION_INDEXERS = {
@@ -171,7 +175,7 @@ def find_changed_files(  # noqa: C901, PLR0912
     return find_files(root), []
 
 
-def index_file(  # noqa: PLR0913, PLR0912, PLR0915, C901
+def index_file(  # noqa: PLR0913, PLR0912, C901
     conn,
     project,
     full_path,
@@ -245,8 +249,6 @@ def index_file(  # noqa: PLR0913, PLR0912, PLR0915, C901
             if embed_tasks is not None:
                 embed_tasks.append((list(embed_ids), list(embed_texts)))
             else:
-                from memos.search.embeddings import FastEmbedEmbedding
-
                 embedder = FastEmbedEmbedding()
                 vecs = embedder.embed(embed_texts)
                 store = SqliteVecStore(conn)
@@ -379,9 +381,6 @@ def cmd_index(args):  # noqa: C901, PLR0912, PLR0915
 
     # Batch embedding: one model instance, chunked with progress
     if embed_tasks and do_embed:
-        from memos.search.embeddings import FastEmbedEmbedding
-        from memos.search.sqlite_vec_store import SqliteVecStore
-
         all_ids: list[int] = []
         all_texts: list[str] = []
         for eids, etxts in embed_tasks:
@@ -495,8 +494,6 @@ def cmd_query_diff_range(args):
     root = str(Path(args.path).resolve())
     files, _deleted = find_changed_files(root, git_ref=args.since)
 
-    from memos.core.db import get_file_by_path
-
     changed_in_index: list[str] = []
     for _full, rel in files:
         existing = get_file_by_path(conn, project.id, rel)
@@ -513,8 +510,6 @@ def cmd_query_diff_range(args):
     if fmt == "json":
         print(json.dumps(result, indent=2, default=str))
     else:
-        from rich.table import Table
-
         console = Console()
         table = Table(title=f"Diff-range impact (since {args.since})")
         table.add_column("File")
@@ -542,8 +537,6 @@ def cmd_serve(args):
 
 
 def cmd_serve_mcp(args):
-    from memos.mcp.server import mcp
-
     mcp.run(transport="stdio")
 
 
@@ -576,8 +569,6 @@ def cmd_memory_list(args):
 
 
 def cmd_doctor(args):
-    from rich.table import Table
-
     conn, project = _open_db(args)
     root = str(Path(args.path).resolve())
     results = run_diagnostics(conn, project, root)
@@ -599,9 +590,6 @@ def cmd_doctor(args):
 
 
 def cmd_watch(args):  # noqa: C901
-    from watchdog.events import FileSystemEventHandler
-    from watchdog.observers import Observer
-
     root = str(Path(args.path).resolve())
     db_path = str(Path(root) / ".memos" / "memory.db")
     if not Path(db_path).exists():

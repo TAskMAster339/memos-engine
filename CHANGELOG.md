@@ -2,12 +2,53 @@
 
 ## 0.4.0 — 2026-07-23
 
-- Import resolution (`resolve_imports`): resolves `imports.resolved_file_id` for TS/JS/Python relative imports
+### Import resolution (core)
+
+- Import resolution (`resolve_imports`): resolves `imports.resolved_file_id` for TS/JS/Python
 - Language-specific resolvers extracted to `memos/query/import_resolver.py`
+- Python absolute intra-package imports resolved (e.g. `memos.core.db` → file)
+- TS/JS absolute imports resolved via `tsconfig.json`/`jsconfig.json` — `baseUrl` and `paths` aliases with `*` wildcard support
+- Go in-module imports resolved via `go.mod` module prefix
 - `find_dead_imports` now distinguishes `broken` relative imports vs truly external packages
 - Integration: `resolve_imports` called from `memos index`, MCP `open_project`, MCP `reindex_file_tool`, and `memos watch`
-- Tests: `test_import_resolver.py` (8 unit tests), `test_import_resolution_efficiency.py` (N+1 guard), integration test in `test_dependency_graph.py`
-- `get_dependency_graph` and `find_import_cycles` now work on real data without manual ID propping
+
+### Git-aware incremental indexing
+
+- `memos index --since <ref>` — only reindex files changed since a git ref
+- `memos index --dirty` — reindex uncommitted changes only
+- Deleted files cleaned up automatically from the index
+
+### Impact analysis & diagnostics
+
+- Rename impact: word-boundary regex (`\b`) instead of SQL `LIKE` — no false positives (e.g. `Config` ≠ `ConfigLoader`)
+- `memos query diff-range --since <ref>` — aggregated PR impact report per file
+- MCP `diff_range_impact_tool(since, project)` — same report via MCP
+- `memos doctor` — index freshness, schema, embeddings, unresolved edges diagnostics
+
+### Performance
+
+- Batch embedding: single model, chunked by 256 with rich Progress bar
+- `--profile` flag on `memos index` prints phase timings (parse/embed/resolve)
+- `scripts/benchmark_index.py` — measures parse/embed/resolve/cold-warm query latency
+- Migration 0005: composite index `symbols(name, file_id)` for faster resolve
+- Fixed N+1 in `resolve_call_edges` (batch SELECT vs per-edge loop)
+- Query-efficiency regression guard (N+1 guard test)
+
+### Language support
+
+- JavaScript (.js/.jsx) support: `require()` → import, `module.exports` ignored
+
+### Tooling & DX
+
+- MCP: `_tracked` decorator counts per-session tool usage via `usage_stats_tool`
+- File watching: `memos watch` auto-reindexes on file changes (watchdog, 500ms debounce)
+
+### Packaging
+
+- CI smoke-test: build wheel → install in isolated venv → end-to-end
+- Migration presence test (guarantees ≥5 migrations)
+- Python 3.12 + 3.13 CI matrix
+- Release workflow: tag verification, automated PyPI publish, GitHub Release with changelog
 
 ## 0.3.0 — 2026-07-22
 

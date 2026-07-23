@@ -293,3 +293,4 @@ tests/
 18. ✅ Section 1 (Phase 3): JavaScript .js/.jsx support — require()→import, language_override, fixtures, tests
 19. ✅ Section 3 (Phase 3): Performance — batch embedding, profile flag, benchmark script, N+1 fix, migration 0005
 20. ✅ Section 6: Import resolution — `resolve_imports` in `core/db.py`, language-specific resolvers in `query/import_resolver.py`, integration in CLI/MCP, `find_dead_imports` `broken` flag, efficiency regression guard
+21. ✅ Section 7: Rename impact — regex word-boundary filter instead of SQL `LIKE` in `get_rename_impact`, new collision test `Config` vs `ConfigLoader`

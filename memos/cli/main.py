@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -84,6 +85,89 @@ def find_files(root: str) -> list[tuple[str, str]]:
                 rel = os.path.relpath(full, root)
                 files.append((full, rel))
     return sorted(files)
+
+
+def find_changed_files(  # noqa: C901, PLR0912
+    root: str,
+    git_ref: str | None = None,
+    *,
+    dirty: bool = False,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Return (files_to_index, files_to_delete) based on git diff or status.
+
+    * *git_ref* — ``git diff --name-status <ref>``, indexes M/A, deletes D.
+    * *dirty* — ``git status --porcelain``, indexes M/??/A, deletes D.
+    * Neither — delegates to :func:`find_files` (no deletions).
+
+    Non-git directory or invalid ref → prints error to stderr and exits(1).
+    """
+    if git_ref:
+        result = subprocess.run(
+            ["git", "diff", "--name-status", git_ref],
+            capture_output=True, text=True, cwd=root,
+            check=False,
+        )
+        if result.returncode != 0:
+            msg = result.stderr.strip() or f"unknown ref: {git_ref}"
+            print(
+                f"error: git diff --name-status {git_ref} failed — {msg}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        files: list[tuple[str, str]] = []
+        deleted: list[str] = []
+        for line in result.stdout.split("\n"):
+            sline = line.strip()
+            if not sline:
+                continue
+            parts = sline.split("\t")
+            if len(parts) < 2:  # noqa: PLR2004
+                continue
+            status, rel_path = parts[0], parts[1]
+            ext = Path(rel_path).suffix.lower()
+            if ext not in EXTENSION_INDEXERS:
+                continue
+            if status == "D":
+                deleted.append(rel_path)
+            else:
+                full = Path(root) / rel_path
+                if full.exists():
+                    files.append((str(full), rel_path))
+                else:
+                    deleted.append(rel_path)
+        return sorted(files), sorted(deleted)
+
+    if dirty:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, cwd=root,
+            check=False,
+        )
+        if result.returncode != 0:
+            print("error: not a git repository", file=sys.stderr)
+            sys.exit(1)
+
+        files = []
+        deleted = []
+        for line in result.stdout.split("\n"):
+            sline = line.strip()
+            if not sline:
+                continue
+            raw_status = sline[:2]
+            rel_path = sline[2:].strip()
+            ext = Path(rel_path).suffix.lower()
+            if ext not in EXTENSION_INDEXERS:
+                continue
+            if "D" in raw_status:
+                deleted.append(rel_path)
+            else:
+                full = Path(root) / rel_path
+                if full.exists():
+                    files.append((str(full), rel_path))
+        return sorted(files), sorted(deleted)
+
+    return find_files(root), []
 
 
 def index_file(  # noqa: PLR0913, PLR0912, PLR0915, C901
@@ -207,7 +291,27 @@ def cmd_index(args):  # noqa: C901, PLR0912, PLR0915
     run_migrations(conn)
 
     project = get_or_create_project(conn, root)
-    files = find_files(root)
+
+    if args.since and args.dirty:
+        print("error: --since and --dirty are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
+    if args.since:
+        files, deleted = find_changed_files(root, git_ref=args.since)
+        for rel in deleted:
+            existing = get_file_by_path(conn, project.id, rel)
+            if existing:
+                remove_vec_for_file(conn, existing.id)
+                delete_file(conn, existing.id)
+    elif args.dirty:
+        files, deleted = find_changed_files(root, dirty=True)
+        for rel in deleted:
+            existing = get_file_by_path(conn, project.id, rel)
+            if existing:
+                remove_vec_for_file(conn, existing.id)
+                delete_file(conn, existing.id)
+    else:
+        files = find_files(root)
 
     indexed = 0
     errors = 0
@@ -545,6 +649,15 @@ def main():  # noqa: PLR0915
         "--profile",
         action="store_true",
         help="Print phase timing breakdown to stderr",
+    )
+    p_index.add_argument(
+        "--since",
+        help="Only index files changed since git ref (commit, branch, or tag)",
+    )
+    p_index.add_argument(
+        "--dirty",
+        action="store_true",
+        help="Only index uncommitted changed files (git status --porcelain)",
     )
     p_index.set_defaults(func=cmd_index)
 

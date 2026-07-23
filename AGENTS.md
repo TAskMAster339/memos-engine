@@ -142,6 +142,7 @@ a short descriptive title and all details in the commit body.
 | `uv run pytest tests/test_reindex.py` | Reindex tool tests |
 | `uv run pytest tests/test_import_resolver.py` | Import resolver tests |
 | `uv run pytest tests/test_import_resolution_efficiency.py` | Import N+1 regression guard |
+| `uv run pytest tests/test_cli_index_incremental.py` | Git-aware incremental index tests |
 | `uv run pytest tests/test_cli_doctor.py` | Doctor CLI tests |
 | `uv run pytest tests/test_watch.py` | Watch (slow) tests |
 | `uv run pytest --cov=memos --cov-report=term-missing -m "not slow"` | Tests with coverage report |
@@ -294,3 +295,4 @@ tests/
 19. ✅ Section 3 (Phase 3): Performance — batch embedding, profile flag, benchmark script, N+1 fix, migration 0005
 20. ✅ Section 6: Import resolution — `resolve_imports` in `core/db.py`, language-specific resolvers in `query/import_resolver.py`, integration in CLI/MCP, `find_dead_imports` `broken` flag, efficiency regression guard
 21. ✅ Section 7: Rename impact — regex word-boundary filter instead of SQL `LIKE` in `get_rename_impact`, new collision test `Config` vs `ConfigLoader`
+22. ✅ Section 8: Git-aware incremental reindex — `--since` and `--dirty` flags for `memos index`, `find_changed_files` function, deleted file cleanup, non-git error handling

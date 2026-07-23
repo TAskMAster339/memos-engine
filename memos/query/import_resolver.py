@@ -51,34 +51,43 @@ def resolve_python_import(
 ) -> int | None:
     """Resolve a Python import path.
 
-    Only resolves relative imports (starting with one or more dots).
-    Non-relative paths (stdlib, external packages) return None.
+    * Relative imports (starting with dots) — resolved relative to source file.
+    * Absolute imports (no leading dots) — dots are converted to path separators
+      and looked up in the index; stdlib/external packages not found in the index
+      return None.
 
     One dot = same package dir, two dots = parent package, etc.
     Candidates: +.py, +/__init__.py
     """
-    if not imported_path.startswith("."):
+    if imported_path.startswith("."):
+        src_dir = posixpath.dirname(src_path)
+
+        n_dots = 0
+        while n_dots < len(imported_path) and imported_path[n_dots] == ".":
+            n_dots += 1
+
+        rest = imported_path[n_dots:]
+        if rest:
+            rest = rest.replace(".", "/")
+
+        up_count = n_dots - 1
+        base_dir = src_dir
+        for _ in range(up_count):
+            base_dir = posixpath.dirname(base_dir)
+
+        prefix = posixpath.join(base_dir, rest) if rest else base_dir
+
+        for suffix in _PY_CANDIDATES:
+            candidate = prefix + suffix
+            fid = path_to_id.get(candidate)
+            if fid is not None:
+                return fid
         return None
 
-    src_dir = posixpath.dirname(src_path)
-
-    n_dots = 0
-    while n_dots < len(imported_path) and imported_path[n_dots] == ".":
-        n_dots += 1
-
-    rest = imported_path[n_dots:]
-    if rest:
-        rest = rest.replace(".", "/")
-
-    up_count = n_dots - 1
-    base_dir = src_dir
-    for _ in range(up_count):
-        base_dir = posixpath.dirname(base_dir)
-
-    prefix = posixpath.join(base_dir, rest) if rest else base_dir
-
+    # Absolute import — try matching against indexed files
+    rel_path = imported_path.replace(".", "/")
     for suffix in _PY_CANDIDATES:
-        candidate = prefix + suffix
+        candidate = rel_path + suffix
         fid = path_to_id.get(candidate)
         if fid is not None:
             return fid

@@ -192,6 +192,22 @@ class TestResolveGoImports:
         ).fetchone()
         assert row["resolved_file_id"] is None
 
+    def test_python_absolute_intra_package(self, conn):
+        project = _make_project(conn, root="/test/proj")
+        f1 = _make_file(conn, project.id, "tests/test_main.py", language="python")
+        _make_file(conn, project.id, "memos/core/db.py", language="python")
+        imp = _make_import(conn, f1.id, "memos.core.db")
+        conn.commit()
+
+        count = resolve_imports(conn, project.id)
+        assert count == 1
+
+        row = conn.execute(
+            "SELECT resolved_file_id FROM imports WHERE id = ?", (imp.id,),
+        ).fetchone()
+        assert row is not None
+        assert row["resolved_file_id"] is not None
+
     def test_python_relative_same_package(self, conn):
         project = _make_project(conn)
         f1 = _make_file(conn, project.id, "src/main.py", language="python")

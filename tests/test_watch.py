@@ -39,7 +39,7 @@ def test_watch_detects_file_change(tmp_path: Path):
     project = project.model_copy(update={"id": cur.lastrowid})
 
     indexer = EXTENSION_INDEXERS[".ts"]
-    from memos.cli.main import index_file  # noqa: PLC0415
+    from memos.cli.main import index_file
     index_file(
         conn, project, str(src_file), "src/a.ts", indexer,
         full=False, embed=False,

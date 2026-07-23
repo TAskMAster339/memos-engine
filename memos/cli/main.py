@@ -160,7 +160,7 @@ def index_file(  # noqa: PLR0913, PLR0912, PLR0915, C901
             if embed_tasks is not None:
                 embed_tasks.append((list(embed_ids), list(embed_texts)))
             else:
-                from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
+                from memos.search.embeddings import FastEmbedEmbedding
 
                 embedder = FastEmbedEmbedding()
                 vecs = embedder.embed(embed_texts)
@@ -274,8 +274,8 @@ def cmd_index(args):  # noqa: C901, PLR0912, PLR0915
 
     # Batch embedding: one model instance, chunked with progress
     if embed_tasks and do_embed:
-        from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
-        from memos.search.sqlite_vec_store import SqliteVecStore  # noqa: PLC0415
+        from memos.search.embeddings import FastEmbedEmbedding
+        from memos.search.sqlite_vec_store import SqliteVecStore
 
         all_ids: list[int] = []
         all_texts: list[str] = []
@@ -391,7 +391,7 @@ def cmd_serve(args):
 
 
 def cmd_serve_mcp(args):
-    from memos.mcp.server import mcp  # noqa: PLC0415
+    from memos.mcp.server import mcp
 
     mcp.run(transport="stdio")
 
@@ -425,7 +425,7 @@ def cmd_memory_list(args):
 
 
 def cmd_doctor(args):
-    from rich.table import Table  # noqa: PLC0415
+    from rich.table import Table
 
     conn, project = _open_db(args)
     root = str(Path(args.path).resolve())
@@ -448,8 +448,8 @@ def cmd_doctor(args):
 
 
 def cmd_watch(args):  # noqa: C901
-    from watchdog.events import FileSystemEventHandler  # noqa: PLC0415
-    from watchdog.observers import Observer  # noqa: PLC0415
+    from watchdog.events import FileSystemEventHandler
+    from watchdog.observers import Observer
 
     root = str(Path(args.path).resolve())
     db_path = str(Path(root) / ".memos" / "memory.db")

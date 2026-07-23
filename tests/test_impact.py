@@ -165,6 +165,26 @@ class TestGetRenameImpact:
         result = get_rename_impact(conn, 99999)
         assert "error" in result
 
+    def test_rename_impact_no_substring_collision(self, conn):
+        _, _, fb, _, _, _, sym_config, _ = _seed(conn)
+        insert_symbol(conn, Symbol(
+            file_id=fb.id, name="ConfigLoader", kind="interface",
+            exported=True, content_hash="h6", start_line=10, end_line=10,
+        ))
+        insert_symbol(conn, Symbol(
+            file_id=fb.id, name="useLoader", kind="function",
+            signature="(l: ConfigLoader): void",
+            exported=True, content_hash="h7", start_line=12, end_line=14,
+        ))
+        conn.commit()
+        result = get_rename_impact(conn, sym_config.id)
+        refs = result["type_references"]
+        ref_names = {r["name"] for r in refs}
+        assert "user" in ref_names, "user (c: Config) should match"
+        assert "useLoader" not in ref_names, (
+            "useLoader (l: ConfigLoader) should NOT match Config"
+        )
+
 
 class TestGetDiffImpact:
     def test_aggregates_by_caller_file(self, conn):

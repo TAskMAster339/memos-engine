@@ -85,7 +85,7 @@ def _open_project(root_path: str):
 
     project = get_project_by_root(conn, resolved)
     if project is None:
-        from memos.cli.main import (  # noqa: PLC0415
+        from memos.cli.main import (
             EXTENSION_INDEXERS,
             find_files,
             get_or_create_project,
@@ -108,7 +108,7 @@ def _open_project(root_path: str):
                 full=True,
                 embed=True,
             )
-        from memos.core.db import resolve_call_edges, resolve_imports  # noqa: PLC0415
+        from memos.core.db import resolve_call_edges, resolve_imports
 
         resolve_call_edges(conn, project.id)
         resolve_imports(conn, project.id)
@@ -594,8 +594,8 @@ def reindex_file_tool(
         project: Project root path (must have been opened via open_project).
             Defaults to the most recently opened project.
     """
-    from memos.cli.main import EXTENSION_INDEXERS, index_file  # noqa: PLC0415
-    from memos.core.db import resolve_call_edges, resolve_imports  # noqa: PLC0415
+    from memos.cli.main import EXTENSION_INDEXERS, index_file
+    from memos.core.db import resolve_call_edges, resolve_imports
 
     try:
         conn, proj = _ensure_project(project)

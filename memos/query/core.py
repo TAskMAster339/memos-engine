@@ -1,4 +1,5 @@
 import hashlib
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -149,8 +150,8 @@ def semantic_search(
     top_k: int = 10,
     project_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    from memos.search.embeddings import FastEmbedEmbedding  # noqa: PLC0415
-    from memos.search.sqlite_vec_store import SqliteVecStore  # noqa: PLC0415
+    from memos.search.embeddings import FastEmbedEmbedding
+    from memos.search.sqlite_vec_store import SqliteVecStore
 
     embedder = FastEmbedEmbedding()
     store = SqliteVecStore(conn)
@@ -442,11 +443,13 @@ def get_rename_impact(
             "FROM symbols s2 "
             "JOIN files f2 ON f2.id = s2.file_id "
             "WHERE s2.id != ? AND f2.project_id = ? "
-            "AND s2.signature IS NOT NULL "
-            "AND s2.signature LIKE ?",
-            (symbol_id, sym["project_id"], f"%{sym['name']}%"),
+            "AND s2.signature IS NOT NULL",
+            (symbol_id, sym["project_id"]),
         ).fetchall()
-        type_references = [dict(r) for r in refs]
+        pattern = re.compile(rf'\b{re.escape(sym["name"])}\b')
+        type_references = [
+            dict(r) for r in refs if pattern.search(r["signature"])
+        ]
 
     imports: list[dict[str, Any]] = []
     imp_rows = conn.execute(

@@ -15,7 +15,7 @@ class FastEmbedEmbedding(EmbeddingModel):
 
     @cached_property
     def model(self):
-        from fastembed import TextEmbedding  # noqa: PLC0415
+        from fastembed import TextEmbedding
 
         return TextEmbedding(self.MODEL_NAME)
 

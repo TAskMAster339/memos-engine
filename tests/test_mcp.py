@@ -1,4 +1,7 @@
+import json
+import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -274,6 +277,7 @@ async def test_tool_registration(mcp_conn):
     assert "memory_search_tool" in names
     assert "memory_prune_tool" in names
     assert "reindex_file_tool" in names
+    assert "diff_range_impact_tool" in names
 
 
 @pytest.mark.anyio
@@ -303,6 +307,85 @@ async def test_get_memories(mcp_conn):
     text = results[0][0].text
     assert '"content": "mem 1"' in text
     assert '"content": "mem 2"' in text
+
+
+@pytest.mark.anyio
+async def test_diff_range_impact_tool(tmp_path: Path):
+    root = str(tmp_path)
+    # git init
+    _git(["git", "init"], root)
+    _git(["git", "config", "user.email", "t@t"], root)
+    _git(["git", "config", "user.name", "t"], root)
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.ts").write_text("export const greet = (): void => {};")
+    (src / "b.ts").write_text(
+        "import { greet } from './a'; export const main = (): void => { greet(); };"
+    )
+    _git(["git", "add", "-A"], root)
+    _git(["git", "commit", "-m", "A"], root)
+    ref_a = _git(["git", "rev-parse", "HEAD"], root)
+
+    # modify a.ts only
+    (src / "a.ts").write_text("export const greet = (x: number): void => {};")
+    _git(["git", "add", "-A"], root)
+    _git(["git", "commit", "-m", "B: mod a"], root)
+
+    # index files into in-memory db
+    from memos.cli.main import (
+        EXTENSION_INDEXERS,
+        find_files,
+        get_or_create_project,
+        index_file,
+    )
+    from memos.core.db import (
+        get_connection,
+        resolve_call_edges,
+        resolve_imports,
+        run_migrations,
+    )
+
+    conn = get_connection(":memory:")
+    run_migrations(conn)
+
+    project = get_or_create_project(conn, root)
+    for full, rel in find_files(root):
+        ext = Path(full).suffix.lower()
+        indexer = EXTENSION_INDEXERS[ext]
+        index_file(conn, project, full, rel, indexer, full=True, embed=False)
+    resolve_call_edges(conn, project.id)
+    resolve_imports(conn, project.id)
+    conn.commit()
+
+    _inject_conn(root, conn, project)
+    _srv._active_project = root  # noqa: SLF001
+
+    try:
+        results = await mcp.call_tool(
+            "diff_range_impact_tool",
+            {"since": ref_a},
+        )
+        text = results[0][0].text
+        assert '"files"' in text
+        assert '"total_exported_symbols"' in text
+        assert '"total_external_callers"' in text
+        parsed = json.loads(text)
+        # only a.ts should be in the diff
+        assert len(parsed["files"]) == 1
+        assert parsed["files"][0]["file"]["path"] == "src/a.ts"
+    finally:
+        conn.close()
+        _projects.clear()
+        _srv._active_project = None  # noqa: SLF001
+
+
+def _git(cmd, cwd):
+    res = subprocess.run(
+        cmd, capture_output=True, text=True, cwd=cwd, check=False,
+    )
+    assert res.returncode == 0, f"git {' '.join(cmd)} failed: {res.stderr}"
+    return res.stdout.strip()
 
 
 @pytest.mark.anyio

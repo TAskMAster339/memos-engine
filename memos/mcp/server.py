@@ -16,6 +16,7 @@ from memos.query.core import (
     get_context,
     get_dependency_graph,
     get_diff_impact,
+    get_diff_range_impact,
     get_memory_entries,
     get_module,
     get_rename_impact,
@@ -322,6 +323,42 @@ def diff_impact_tool(
         result = get_diff_impact(conn, path, proj.id)
         if "error" in result:
             return json.dumps(result)
+        return json.dumps(result, indent=2, default=str)
+    except RuntimeError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"query failed: {e}"})
+
+
+@_tracked
+def diff_range_impact_tool(
+    since: str,
+    project: str | None = None,
+) -> str:
+    """Aggregated impact report for files changed since a git ref.
+
+    Gets the list of files changed between *since* and HEAD via git diff,
+    then for each indexed file calls get_diff_impact.
+
+    Args:
+        since: Git ref (commit, branch, or tag) to diff against
+        project: Project root path (must have been opened via open_project).
+            Defaults to the most recently opened project.
+    """
+    try:
+        conn, proj = _ensure_project(project)
+        from memos.cli.main import find_changed_files
+        from memos.core.db import get_file_by_path
+
+        changed_files, _deleted = find_changed_files(
+            proj.root_path, git_ref=since,
+        )
+        changed_in_index: list[str] = []
+        for _full, rel in changed_files:
+            existing = get_file_by_path(conn, proj.id, rel)
+            if existing:
+                changed_in_index.append(rel)
+        result = get_diff_range_impact(conn, proj.id, changed_in_index)
         return json.dumps(result, indent=2, default=str)
     except RuntimeError as e:
         return json.dumps({"error": str(e)})

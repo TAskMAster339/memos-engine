@@ -520,6 +520,36 @@ def get_diff_impact(
     }
 
 
+def get_diff_range_impact(
+    conn,
+    project_id: int,
+    changed_files: list[str],
+) -> dict[str, Any]:
+    """Aggregate impact report for a list of changed file paths.
+
+    For each file that exists in the index, calls *get_diff_impact* and
+    collects exported symbols and their external callers.
+    """
+    files: list[dict[str, Any]] = []
+    total_exported = 0
+    total_external_callers = 0
+    for file_path in changed_files:
+        impact = get_diff_impact(conn, file_path, project_id)
+        if "error" in impact:
+            continue
+        files.append(impact)
+        total_exported += len(impact["exported_symbols"])
+        for sym in impact["exported_symbols"]:
+            total_external_callers += sum(
+                cf["count"] for cf in sym["caller_files"]
+            )
+    return {
+        "files": files,
+        "total_exported_symbols": total_exported,
+        "total_external_callers": total_external_callers,
+    }
+
+
 def find_unused_symbols(
     conn,
     project_id: int,

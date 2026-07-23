@@ -45,6 +45,7 @@ from memos.query.core import (
     add_memory_entry,
     find_calls,
     find_symbol,
+    get_diff_range_impact,
     get_memory_entries,
     get_module,
 )
@@ -489,6 +490,52 @@ def cmd_query_module(args):
     conn.close()
 
 
+def cmd_query_diff_range(args):
+    conn, project = _open_db(args)
+    root = str(Path(args.path).resolve())
+    files, _deleted = find_changed_files(root, git_ref=args.since)
+
+    from memos.core.db import get_file_by_path
+
+    changed_in_index: list[str] = []
+    for _full, rel in files:
+        existing = get_file_by_path(conn, project.id, rel)
+        if existing:
+            changed_in_index.append(rel)
+
+    result = get_diff_range_impact(conn, project.id, changed_in_index)
+    conn.close()
+
+    fmt = args.format
+    if fmt is None:
+        fmt = "table" if sys.stdout.isatty() else "json"
+
+    if fmt == "json":
+        print(json.dumps(result, indent=2, default=str))
+    else:
+        from rich.table import Table
+
+        console = Console()
+        table = Table(title=f"Diff-range impact (since {args.since})")
+        table.add_column("File")
+        table.add_column("Exported")
+        table.add_column("Callers")
+        for f in result["files"]:
+            file_path = f["file"]["path"]
+            exported_count = len(f["exported_symbols"])
+            caller_files: set[str] = set()
+            for sym in f["exported_symbols"]:
+                for cf in sym["caller_files"]:
+                    caller_files.add(cf["file"])
+            callers_str = ", ".join(sorted(caller_files)) or "\u2014"
+            table.add_row(file_path, str(exported_count), callers_str)
+        console.print(table)
+        console.print(
+            f"\nTotal: [cyan]{result['total_exported_symbols']}[/] exported "
+            f"symbols, [cyan]{result['total_external_callers']}[/] external callers"
+        )
+
+
 def cmd_serve(args):
     os.environ["MEMOS_PROJECT_PATH"] = str(Path(args.path).resolve())
     uvicorn.run("memos.api.main:app", host=args.host, port=args.port)
@@ -691,6 +738,21 @@ def main():  # noqa: PLR0915
     p_mod.add_argument("module_path", metavar="path", help="Relative file path")
     p_mod.add_argument("--path", default=".", help="Project root path")
     p_mod.set_defaults(func=cmd_query_module)
+
+    p_diff = qsub.add_parser(
+        "diff-range",
+        help="Aggregated impact report for files changed since a git ref",
+    )
+    p_diff.add_argument(
+        "--since", required=True,
+        help="Git ref (commit, branch, or tag) to diff against",
+    )
+    p_diff.add_argument("--path", default=".", help="Project root path")
+    p_diff.add_argument(
+        "--format", choices=["json", "table"],
+        help="Output format (default: table for TTY, json for pipe)",
+    )
+    p_diff.set_defaults(func=cmd_query_diff_range)
 
     p_memory = sub.add_parser("memory", help="Manage memory entries")
     msub = p_memory.add_subparsers(dest="memory_command", required=True)
